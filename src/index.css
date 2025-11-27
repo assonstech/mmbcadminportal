@@ -1,0 +1,132 @@
+/* index.css — global styles + small MUI DataGrid polish */
+
+/* Brand color (match your MUI theme primary.main) */
+:root {
+  --brand: #6F1D8E;
+  --bg-soft: #fafafa;
+  --border-soft: #eaeaea;
+}
+
+/* Make the app take full height */
+html, body, #root {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  /* MUI ThemeProvider + CssBaseline will set fonts;
+     this is only a fallback if CssBaseline isn't loaded yet. */
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  background: var(--bg-soft);
+  color: #111;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Images & media scale nicely */
+img, svg, video, canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Links */
+a {
+  color: var(--brand);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Smooth scrolling for in-page nav (optional) */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Subtle custom scrollbar (WebKit) */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.3);
+}
+
+/* ---- MUI DataGrid small refinements ---- */
+.MuiDataGrid-root {
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+}
+
+.MuiDataGrid-columnHeaders {
+  background: #f7f7f7;
+  border-bottom: 1px solid var(--border-soft);
+  font-weight: 600;
+}
+
+.MuiDataGrid-columnHeaderTitle {
+  font-weight: 700;
+}
+
+.MuiDataGrid-row:hover {
+  background-color: #fcfcfc;
+}
+
+/* Remove the strong blue focus ring on cells but keep accessibility */
+.MuiDataGrid-cell:focus,
+.MuiDataGrid-columnHeader:focus {
+  outline: none;
+}
+
+/* Toolbar spacing */
+.MuiDataGrid-toolbarContainer {
+  padding: 8px 12px;
+  gap: 8px;
+}
+
+/* Buttons inside DataGrid toolbars/dialogs feel tighter */
+.MuiButton-root {
+  text-transform: none; /* Keep labels readable */
+}
+
+/* Dialogs: slightly rounder look to match theme shape */
+.MuiDialog-paper {
+  border-radius: 14px;
+}
+
+/* Support for dark mode (if you switch MUI theme mode at runtime) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-soft: #0f0f0f;
+    --border-soft: #2a2a2a;
+  }
+  body {
+    background: var(--bg-soft);
+    color: #eaeaea;
+  }
+  .MuiDataGrid-root {
+    background: #121212;
+    border-color: var(--border-soft);
+  }
+  .MuiDataGrid-columnHeaders {
+    background: #161616;
+    border-bottom-color: var(--border-soft);
+  }
+  .MuiDataGrid-row:hover {
+    background-color: #151515;
+  }
+}
