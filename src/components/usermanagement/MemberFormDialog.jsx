@@ -184,6 +184,7 @@ export default function MemberFormDialog({
                                 >
                                     <MenuItem value="Pending">Pending</MenuItem>
                                     <MenuItem value="Approved">Approved</MenuItem>
+                                    <MenuItem value="Deleted">Deleted</MenuItem>
                                 </TextField>
                             </Grid>
 

@@ -304,7 +304,13 @@ export default function UserManagementPage() {
       width: 120,
       renderCell: (params) => {
         const value = params.value;
-        const color = value === 'Approved' ? 'green' : value === 'Pending' ? 'orange' : 'gray';
+        const statusColors = {
+          Approved: 'green',
+          Pending: 'orange',
+          Deleted: 'red',
+        };
+
+        const color = statusColors[value] || 'gray';
         return (
           <span style={{
             color: 'white',
