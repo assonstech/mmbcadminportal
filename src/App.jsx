@@ -11,6 +11,7 @@ import SessionExpiredDialog from './components/SessionExpiredDiaglo.jsx';
 import KnowledgeSharingPage from './pages/KnowledgeSharingPage.jsx';
 import OrganizationChartPage from './pages/OrganizationChartPage.jsx';
 import CEOPage from './pages/CEOPage.jsx';
+import MouPartnerPage from './pages/MouPartnerPage.jsx';
 
 function RequireAuth() {
   const { isAuthenticated, loading } = useAuth();
@@ -38,6 +39,8 @@ export default function App() {
             <Route path="knowledges" element={<KnowledgeSharingPage />} />
             <Route path="ceo" element={<CEOPage />} />
             <Route path="organization" element={<OrganizationChartPage />} />
+            <Route path="moupartner" element={<MouPartnerPage />} />
+
 
 
           </Route>

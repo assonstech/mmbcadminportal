@@ -18,7 +18,7 @@ export default function OverlayLoader({ message = 'Loading...' }) {
         justifyContent: 'center',
       }}
     >
-      <CircularProgress size={60} sx={{ color: {} }} />
+      <CircularProgress size={60} sx={{ color: '#fff' }} />
       <Typography variant="h6" sx={{ mt: 2, color: 'white' }}>
         {message}
       </Typography>

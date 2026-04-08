@@ -11,7 +11,7 @@ import EventIcon from '@mui/icons-material/Event';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../auth/AuthContext.jsx';
 import api from '../config/api';
-import { LightbulbCircle,SupervisedUserCircle,PeopleAltTwoTone } from '@mui/icons-material';
+import { LightbulbCircle,SupervisedUserCircle,PeopleAltTwoTone, PieChartOutlineRounded } from '@mui/icons-material';
 
 const drawerWidth = 240;
 
@@ -23,6 +23,8 @@ const navItems = [
   { label: 'Working Group Management', icon: <LightbulbCircle />, to: '/dashboard/knowledges' },
   { label: 'CEO Info', icon: <SupervisedUserCircle />, to: '/dashboard/ceo' },
   { label: 'Organization', icon: <PeopleAltTwoTone/>, to: '/dashboard/organization' },
+  { label: 'Mou Partners', icon: <PieChartOutlineRounded/>, to: '/dashboard/moupartner' },
+
 
 ];
 
