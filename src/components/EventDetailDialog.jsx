@@ -19,6 +19,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { getEventDetail, updateRegistrationPaidStatus } from "../controllers/EventController";
 import { baseImageURL } from "../config/api";
+import * as XLSX from 'xlsx';
+import { saveAs } from 'file-saver';
 
 const eventTypeOptions = [
     { value: "inPerson", label: "In Person" },
@@ -60,6 +62,69 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
             fetchEventDetail(selectedEvent.eventid);
         }
     }, [selectedEvent]);
+
+    const handleExportExcel = () => {
+        const rows = [];
+    
+        filteredRegistrations.forEach((reg) => {
+            // Member row
+            rows.push([
+                reg.representiveName || '',
+                reg.phone || '',
+                reg.email || '',
+            ]);
+    
+            // Guest rows
+            if (reg.guests && reg.guests.length > 0) {
+                reg.guests.forEach((g) => {
+                    rows.push([
+                        g.guestName || '',
+                        g.guestPhone || '',
+                        g.guestEmail || '',
+                    ]);
+                });
+            }
+        });
+    
+        if (rows.length === 0) {
+            alert("No data to export");
+            return;
+        }
+    
+        const eventName = selectedEvent?.eventTitle || 'Event';
+        const eventDate = formatDate(selectedEvent?.eventDate);
+    
+        const worksheet = XLSX.utils.aoa_to_sheet([
+            [`Event Name: ${eventName}`, '', `Event Date: ${eventDate}`],
+            [],
+            ['Name', 'Phone', 'Email'],
+            ...rows,
+        ]);
+    
+        worksheet['!cols'] = [
+            { wch: 35 }, // Name
+            { wch: 20 }, // Phone
+            { wch: 35 }, // Email
+        ];
+    
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Registrations');
+    
+        const excelBuffer = XLSX.write(workbook, {
+            bookType: 'xlsx',
+            type: 'array',
+        });
+    
+        const blob = new Blob([excelBuffer], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        });
+    
+        const safeFileName = (eventName || 'event')
+            .replace(/[^a-z0-9]/gi, '_')
+            .toLowerCase();
+    
+        saveAs(blob, `${safeFileName}_registrations.xlsx`);
+    };
 
     const fetchEventDetail = async (eventId) => {
         setLoading(true);
@@ -241,6 +306,13 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
                                             <MenuItem value="Paid">Paid</MenuItem>
                                             <MenuItem value="Unpaid">Unpaid</MenuItem>
                                         </Select>
+                                        <Button
+                                            variant="contained"
+                                            onClick={handleExportExcel}
+                                        >
+                                            Export Excel
+                                        </Button>
+
                                         <Button
                                             variant="outlined"
                                             startIcon={<RefreshIcon />}

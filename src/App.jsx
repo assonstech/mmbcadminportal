@@ -12,6 +12,9 @@ import KnowledgeSharingPage from './pages/KnowledgeSharingPage.jsx';
 import OrganizationChartPage from './pages/OrganizationChartPage.jsx';
 import CEOPage from './pages/CEOPage.jsx';
 import MouPartnerPage from './pages/MouPartnerPage.jsx';
+import MemberDirectoryPage from './pages/MemberDirectoryPage.jsx';
+import SeasonalPromotionPage from './pages/SeasonalPromotionPage.jsx';
+import NewsLetterPage from './pages/NewsLetterPage.jsx';
 
 function RequireAuth() {
   const { isAuthenticated, loading } = useAuth();
@@ -40,6 +43,10 @@ export default function App() {
             <Route path="ceo" element={<CEOPage />} />
             <Route path="organization" element={<OrganizationChartPage />} />
             <Route path="moupartner" element={<MouPartnerPage />} />
+            <Route path="member-directory" element={<MemberDirectoryPage />} />
+            <Route path="seasonal-promotion" element={<SeasonalPromotionPage />} />
+
+            <Route path="newLetter" element={<NewsLetterPage />}/>
 
 
 
