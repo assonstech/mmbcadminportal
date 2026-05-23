@@ -25,13 +25,21 @@ export const getAllKnowledge = async (page = 1, limit = 10, search = '') => {
 // Create a new knowledge post
 export const createKnowledge = async (formData) => {
   try {
-    const postBody = {
-      content: formData.content,
-      image: formData.image,
-      createdBy: formData.createdBy || 'admin',
-    };
+    const payload = new FormData();
+    payload.append('content', formData.content || '');
+    payload.append('createdBy', formData.createdBy || 'admin');
 
-    const res = await api.post('/knowledge', postBody);
+    if (formData.image instanceof File) {
+      payload.append('image', formData.image);
+    }
+
+    if (formData.pdfUrl instanceof File) {
+      payload.append('pdfUrl', formData.pdfUrl);
+    }
+
+    const res = await api.post('/knowledge', payload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
   } catch (err) {
     console.error('Error creating knowledge:', err);
@@ -42,14 +50,21 @@ export const createKnowledge = async (formData) => {
 // Update existing knowledge post
 export const updateKnowledge = async (id, formData) => {
   try {
-    const postBody = {
-      content: formData.content,
-      image: formData.image,
-      createdBy: formData.createdBy,
-      updatedBy: formData.updatedBy || 'admin',
-    };
+    const payload = new FormData();
+    payload.append('content', formData.content || '');
+    payload.append('createdBy', formData.createdBy || 'admin');
 
-    const res = await api.put(`/knowledge/${id}`, postBody);
+    if (formData.image instanceof File) {
+      payload.append('image', formData.image);
+    }
+
+    if (formData.pdfUrl instanceof File) {
+      payload.append('pdfUrl', formData.pdfUrl);
+    }
+
+    const res = await api.put(`/knowledge/${id}`, payload, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return res.data;
   } catch (err) {
     console.error('Error updating knowledge:', err);
@@ -65,5 +80,18 @@ export const deleteKnowledge = async (id) => {
   } catch (err) {
     console.error('Error deleting knowledge:', err);
     return { success: false };
+  }
+};
+
+export const removeKnowledgePdf = async (id) => {
+  try {
+    const res = await api.delete(`/knowledge/${id}/pdf`);
+    return res.data;
+  } catch (err) {
+    console.error('Error removing knowledge PDF:', err);
+    return {
+      success: false,
+      message: err.response?.data?.message || 'Failed to remove PDF',
+    };
   }
 };

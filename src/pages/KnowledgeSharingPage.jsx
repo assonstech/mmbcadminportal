@@ -22,6 +22,7 @@ import {
     InputLabel,
     Select,
     MenuItem,
+    Link,
 } from "@mui/material";
 import { AddCircleOutline, Edit, Close, DeleteOutline } from "@mui/icons-material";
 import { formatDistanceToNow } from "date-fns";
@@ -30,15 +31,17 @@ import {
     createKnowledge,
     updateKnowledge,
     deleteKnowledge,
+    removeKnowledgePdf,
 } from "../controllers/KnowledgeController";
-import { deleteImage, sendNotification } from "../controllers/MemberController";
-import api, { baseImageURL } from "../config/api";
+import { sendNotification } from "../controllers/MemberController";
+import { baseImageURL } from "../config/api";
 import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 
 const emptyForm = {
     id: "",
     content: "",
     image: null,
+    pdfUrl: null,
     createdBy: "",
     createdAt: "",
 };
@@ -51,7 +54,8 @@ const KnowledgeSharingPage = () => {
     const [editing, setEditing] = useState(false);
     const [openModal, setOpenModal] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
-    const [previousImage, setPreviousImage] = useState(null);
+    const [selectedPdfName, setSelectedPdfName] = useState("");
+    const [existingPdfUrl, setExistingPdfUrl] = useState("");
     const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "success" });
     const [validationErrors, setValidationErrors] = useState([]);
     const [deleteOpen, setDeleteOpen] = useState(false);
@@ -89,6 +93,7 @@ const KnowledgeSharingPage = () => {
                 const data = rows.map((k) => ({
                     ...k,
                     image: k.image ? baseImageURL + k.image : null,
+                    pdfUrl: k.pdfUrl ? baseImageURL + k.pdfUrl : null,
                     createdBy: k.createdBy || "Unknown",
                 }));
                 setKnowledgeList(data);
@@ -126,23 +131,6 @@ const KnowledgeSharingPage = () => {
         setPage(1);
     };
 
-    // 🔹 Handle Image Upload
-    const handleUpload = async (file) => {
-        if (!(file instanceof File)) return null;
-        try {
-            const formData = new FormData();
-            formData.append("postImage", file);
-
-            const res = await api.post("/single-upload/postImage", formData, {
-                headers: { "Content-Type": "multipart/form-data" },
-            });
-            return res.data.success ? res.data.postImage : null;
-        } catch (err) {
-            console.error("Upload failed:", err);
-            return null;
-        }
-    };
-
     // 🔹 Image Preview
     const handleImageChange = (e) => {
         const file = e.target.files?.[0];
@@ -157,6 +145,35 @@ const KnowledgeSharingPage = () => {
         }
     };
 
+    const handlePdfChange = (e) => {
+        const file = e.target.files?.[0] || null;
+        setForm((f) => ({ ...f, pdfUrl: file }));
+        setSelectedPdfName(file?.name || "");
+    };
+
+    const handleRemovePdf = async () => {
+        if (!form.id) return;
+
+        try {
+            setActionLoading(true);
+            const res = await removeKnowledgePdf(form.id);
+            if (res?.success) {
+                setExistingPdfUrl("");
+                setSelectedPdfName("");
+                setForm((f) => ({ ...f, pdfUrl: null }));
+                setSnackbar({ open: true, message: "PDF removed successfully", severity: "success" });
+                await fetchKnowledge(setActionLoading, page, limit, search);
+            } else {
+                setSnackbar({ open: true, message: res?.message || "Failed to remove PDF", severity: "error" });
+            }
+        } catch (err) {
+            console.error("Error removing PDF:", err);
+            setSnackbar({ open: true, message: "Failed to remove PDF", severity: "error" });
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
     // 🔹 Form Validation
     const validateForm = useCallback(() => {
         const errors = [];
@@ -164,8 +181,7 @@ const KnowledgeSharingPage = () => {
         // Created By is required
         if (!form.createdBy?.trim()) errors.push("createdBy");
 
-        // Either content or image must exist
-        if (!form.content?.trim() && !form.image) errors.push("contentOrImage");
+        if (!form.content?.trim()) errors.push("content");
 
         setValidationErrors(errors);
 
@@ -189,19 +205,9 @@ const KnowledgeSharingPage = () => {
         try {
             setActionLoading(true);
 
-            let finalImage = form.image;
-            if (form.image instanceof File) {
-                const uploadedFile = await handleUpload(form.image);
-                if (uploadedFile) {
-                    finalImage = uploadedFile;
-                    if (previousImage) await deleteImage(previousImage);
-                }
-            }
-
-            const payload = { ...form, image: finalImage };
             const res = editing
-                ? await updateKnowledge(form.id, payload)
-                : await createKnowledge(payload);
+                ? await updateKnowledge(form.id, form)
+                : await createKnowledge(form);
 
             if (res.success) {
                 if (!editing) {
@@ -239,10 +245,6 @@ const KnowledgeSharingPage = () => {
                     severity: "success",
                 });
                 await fetchKnowledge(setActionLoading, page, limit, search);
-                if (selectedToDelete.image) {
-                    const filename = selectedToDelete.image.replace(baseImageURL, "");
-                    await deleteImage(filename);
-                }
             }
         } catch (err) {
             console.error("Error deleting knowledge:", err);
@@ -256,10 +258,10 @@ const KnowledgeSharingPage = () => {
 
     // 🔹 Edit / Create / Close
     const handleEdit = (k) => {
-        const filename = k.image ? k.image.replace(baseImageURL, "") : null;
-        setForm({ ...k, image: filename });
+        setForm({ ...k, image: null, pdfUrl: null });
         setPreviewImage(k.image || null);
-        setPreviousImage(filename);
+        setExistingPdfUrl(k.pdfUrl || "");
+        setSelectedPdfName(k.pdfUrl ? k.pdfUrl.replace(baseImageURL, "") : "");
         setEditing(true);
         setOpenModal(true);
     };
@@ -267,6 +269,8 @@ const KnowledgeSharingPage = () => {
     const handleCreate = () => {
         setForm(emptyForm);
         setPreviewImage(null);
+        setSelectedPdfName("");
+        setExistingPdfUrl("");
         setValidationErrors([]);
         setEditing(false);
         setOpenModal(true);
@@ -516,32 +520,40 @@ const KnowledgeSharingPage = () => {
             </Stack>
 
             {/* Add/Edit Modal */}
-            <Dialog open={openModal} onClose={handleClose} maxWidth="sm" fullWidth>
+            <Dialog
+                open={openModal}
+                onClose={actionLoading ? undefined : handleClose}
+                maxWidth="sm"
+                fullWidth
+                PaperProps={{ sx: { position: "relative" } }}
+            >
+                {actionLoading && (
+                    <Box
+                        sx={{
+                            position: "absolute",
+                            inset: 0,
+                            bgcolor: "rgba(255,255,255,0.72)",
+                            zIndex: 20,
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                        }}
+                    >
+                        <CircularProgress />
+                    </Box>
+                )}
                 <DialogTitle sx={{ position: "relative" }}>
                     {editing ? "Edit Knowledge" : "Add Knowledge"}
-                    <IconButton onClick={handleClose} sx={{ position: "absolute", right: 8, top: 8 }}>
+                    <IconButton
+                        onClick={handleClose}
+                        disabled={actionLoading}
+                        sx={{ position: "absolute", right: 8, top: 8 }}
+                    >
                         <Close />
                     </IconButton>
                 </DialogTitle>
 
-                <DialogContent dividers sx={{ position: "relative" }}>
-                    {actionLoading && (
-                        <Box
-                            sx={{
-                                position: "absolute",
-                                inset: 0,
-                                bgcolor: "rgba(255,255,255,0.7)",
-                                zIndex: 10,
-                                display: "flex",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                borderRadius: 1,
-                            }}
-                        >
-                            <CircularProgress />
-                        </Box>
-                    )}
-
+                <DialogContent dividers>
                     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                         <TextField
                             label="Content"
@@ -560,12 +572,10 @@ const KnowledgeSharingPage = () => {
                             onChange={(e) => setForm((f) => ({ ...f, createdBy: e.target.value }))}
                         />
                         <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                Image
+                            </Typography>
                             <input type="file" accept="image/*" onChange={handleImageChange} />
-                            {validationErrors.includes("contentOrImage") && (
-                                <Typography color="error" variant="caption">
-                                    Please include either content or an image
-                                </Typography>
-                            )}
 
                             {previewImage && (
                                 <Box
@@ -582,12 +592,44 @@ const KnowledgeSharingPage = () => {
                                 />
                             )}
                         </Box>
+                        <Box>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                PDF
+                            </Typography>
+                            <input type="file" accept="application/pdf" onChange={handlePdfChange} />
+                            {selectedPdfName && (
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                    {selectedPdfName}
+                                </Typography>
+                            )}
+                            {editing && existingPdfUrl && (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 1 }}>
+                                    <Link href={existingPdfUrl} target="_blank" rel="noopener noreferrer">
+                                        Current PDF
+                                    </Link>
+                                    <Button
+                                        color="error"
+                                        size="small"
+                                        variant="outlined"
+                                        onClick={handleRemovePdf}
+                                        disabled={actionLoading}
+                                    >
+                                        Remove PDF
+                                    </Button>
+                                </Box>
+                            )}
+                        </Box>
                     </Box>
                 </DialogContent>
 
                 <DialogActions>
-                    <Button onClick={handleClose}>Cancel</Button>
-                    <Button variant="contained" onClick={handleSave} disabled={actionLoading}>
+                    <Button onClick={handleClose} disabled={actionLoading}>Cancel</Button>
+                    <Button
+                        variant="contained"
+                        onClick={handleSave}
+                        disabled={actionLoading}
+                        startIcon={actionLoading && <CircularProgress size={18} />}
+                    >
                         {editing ? "Update" : "Create"}
                     </Button>
                 </DialogActions>
@@ -613,6 +655,16 @@ const KnowledgeSharingPage = () => {
                     <Typography variant="body1" sx={{ whiteSpace: "pre-line" }}>
                         {viewDetail?.content}
                     </Typography>
+                    {viewDetail?.pdfUrl && (
+                        <Link
+                            href={viewDetail.pdfUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            sx={{ display: "inline-block", mt: 2 }}
+                        >
+                            View PDF
+                        </Link>
+                    )}
                 </DialogContent>
             </Dialog>
 
