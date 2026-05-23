@@ -1,12 +1,30 @@
 import api from '../config/api';
 
-export const getAllEvents = async () => {
+const parseOptionalFee = (fee) => {
+  if (fee === null || fee === undefined || fee === '') return null;
+  const parsed = parseFloat(fee);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+export const getAllEvents = async (page = 1, limit = 5, search = '') => {
   try {
-    const res = await api.get('/events');
+    const res = await api.get('/events', {
+      params: { page, limit, search },
+    });
     return res.data;
   } catch (err) {
     console.error('Error fetching events:', err);
-    return [];
+    return {
+      success: false,
+      message: 'Failed to fetch events',
+      data: [],
+      pagination: {
+        page,
+        limit,
+        totalCount: 0,
+        totalPages: 1,
+      },
+    };
   }
 };
 
@@ -26,6 +44,8 @@ export const createEvent = async (formData) => {
       createdBy: formData.createdBy || 'admin',
       startTime: formData.startTime,
       endTime: formData.endTime,
+      accessType: formData.accessType,
+      nonMemberFee: parseOptionalFee(formData.nonMemberFee),
     };
 
     const res = await api.post('/events', postBody);
@@ -52,6 +72,8 @@ export const updateEvent = async (id, formData) => {
       updatedBy: formData.updatedBy || 'admin',
       startTime: formData.startTime,
       endTime: formData.endTime,
+      accessType: formData.accessType,
+      nonMemberFee: parseOptionalFee(formData.nonMemberFee),
     };
 
     const res = await api.put(`/events/${id}`, postBody);
@@ -110,3 +132,17 @@ export const updateRegistrationPaidStatus = async (registrationId, isPaid) => {
   }
 };
 
+export const createNotification = async ({ title, description, type, eventId }) => {
+  try {
+    const res = await api.post('/notifications', {
+      title,
+      description,
+      type,
+      eventId,
+    });
+    return res.data;
+  } catch (err) {
+    console.error('Error creating notification:', err.response?.data || err.message || err);
+    return { success: false, message: 'Failed to create notification' };
+  }
+};

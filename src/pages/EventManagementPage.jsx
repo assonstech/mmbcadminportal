@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     Box,
     Typography,
@@ -23,6 +23,7 @@ import {
     RadioGroup,
     FormControlLabel,
     Radio,
+    Stack,
 } from "@mui/material";
 import {
     AddCircleOutline,
@@ -38,8 +39,9 @@ import {
     createEvent,
     updateEvent,
     deleteEvent,
+    createNotification,
 } from "../controllers/EventController";
-import api, { baseImageURL, baseURL } from "../config/api";
+import api, { baseImageURL } from "../config/api";
 import { deleteImage, sendNotification } from "../controllers/MemberController";
 import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 import mixpanel from "../config/mixpanel";
@@ -50,6 +52,32 @@ const eventTypeOptions = [
     { value: "online", label: "Online" },
     { value: "inPerson", label: "In-Person" },
 ];
+
+const accessTypeOptions = [
+    { value: "Member", label: "Member" },
+    { value: "All", label: "All" },
+];
+
+const normalizeAccessType = (accessType) => {
+    if (!accessType) return "All";
+    const normalized = accessType.toString().toLowerCase();
+    return normalized === "member" ? "Member" : "All";
+};
+
+const sanitizeFeeInput = (value) => {
+    const cleaned = value.replace(/[^0-9.]/g, "");
+    const [whole, ...decimals] = cleaned.split(".");
+    return decimals.length ? `${whole}.${decimals.join("")}` : whole;
+};
+
+const getCreatedEventId = (res) => {
+    return res?.eventId
+        || res?.eventid
+        || res?.data?.eventId
+        || res?.data?.eventid
+        || res?.data?.id
+        || res?.id;
+};
 
 const formatDateForInput = (isoDate) => {
     if (!isoDate) return "";
@@ -97,6 +125,8 @@ const emptyForm = {
     updatedDate: "",
     startTime: { hour: "9", minute: "00", period: "AM" },
     endTime: { hour: "5", minute: "00", period: "PM" },
+    accessType: "All",
+    nonMemberFee: "",
 };
 
 const EventManagementPage = () => {
@@ -118,43 +148,85 @@ const EventManagementPage = () => {
         severity: "success",
     });
     const [validationErrors, setValidationErrors] = useState([]);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(5);
+    const [searchInput, setSearchInput] = useState("");
+    const [search, setSearch] = useState("");
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 5,
+        totalCount: 0,
+        totalPages: 1,
+    });
     const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
     const minutes = ["00", "15", "30", "45"];
     const periods = ["AM", "PM"];
 
-
-    const filteredEvents = events.filter((event) => {
-        const search = searchTerm.toLowerCase();
-        return (
-            event.eventTitle?.toLowerCase().includes(search) ||
-            event.eventLocation?.toLowerCase().includes(search) ||
-            event.eventDescription?.toLowerCase().includes(search) ||
-            event.eventFee?.toString().includes(search)
-        );
-    });
-
-    const fetchEvents = async (setLoadingName) => {
+    const fetchEvents = useCallback(async (setLoadingName, currentPage = page, currentLimit = limit, currentSearch = search) => {
         try {
             setLoadingName(true);
-            const res = await getAllEvents();
+            const res = await getAllEvents(currentPage, currentLimit, currentSearch);
             if (res.success) {
-                const data = res.data.map((ev) => ({
+                const rows = Array.isArray(res.data)
+                    ? res.data
+                    : res.data?.events || res.data?.data || [];
+                const paginationData = res.pagination || res.data?.pagination || res.meta || {};
+                const totalCount = paginationData.totalCount ?? paginationData.total ?? paginationData.count ?? rows.length;
+                const totalPages = paginationData.totalPages
+                    ?? paginationData.pages
+                    ?? (paginationData.totalCount || paginationData.total
+                        ? Math.ceil(totalCount / currentLimit)
+                        : rows.length === currentLimit
+                            ? currentPage + 1
+                            : currentPage);
+                const data = rows.map((ev) => ({
                     ...ev,
                     eventImage: ev.eventImage ? baseImageURL + ev.eventImage : null,
                 }));
                 setEvents(data);
+                setPagination({
+                    page: paginationData.page || currentPage,
+                    limit: paginationData.limit || paginationData.pageSize || currentLimit,
+                    totalCount,
+                    totalPages,
+                });
+            } else {
+                setEvents([]);
+                setPagination({
+                    page: currentPage,
+                    limit: currentLimit,
+                    totalCount: 0,
+                    totalPages: 1,
+                });
             }
         } catch (err) {
             console.error("Error fetching events:", err);
+            setEvents([]);
+            setPagination({
+                page: currentPage,
+                limit: currentLimit,
+                totalCount: 0,
+                totalPages: 1,
+            });
         } finally {
             setLoadingName(false);
         }
-    };
+    }, [page, limit, search]);
 
     useEffect(() => {
-        fetchEvents(setLoading);
-    }, []);
+        fetchEvents(setLoading, page, limit, search);
+    }, [fetchEvents, page, limit, search]);
+
+    const handleSearch = () => {
+        setPage(1);
+        setSearch(searchInput.trim());
+    };
+
+    const handleResetSearch = () => {
+        setSearchInput("");
+        setSearch("");
+        setPage(1);
+    };
 
     const handleImageChange = (e) => {
         const file = e.target.files[0];
@@ -188,13 +260,13 @@ const EventManagementPage = () => {
             "eventLocation",
             "eventType",
             "feeType",
+            "accessType",
             "eventDescription",
             "eventRule",
             "eventImage", // ✅ Add this line
 
         ];
         if (form.feeType === "Paid") requiredFields.push("eventFee"); // Only require fee if Paid
-
         const errors = requiredFields.filter((f) => {
             if (f === "eventImage") {
                 // ✅ Only require image if creating or if user cleared existing image
@@ -236,6 +308,8 @@ const EventManagementPage = () => {
                 startTime: convertTo24Hour(form.startTime),
                 endTime: convertTo24Hour(form.endTime),
                 eventFee: form.feeType === "Free" ? null : form.eventFee,
+                accessType: form.accessType,
+                nonMemberFee: form.accessType === "All" ? form.nonMemberFee : null,
             };
 
             let res = editing
@@ -248,8 +322,20 @@ const EventManagementPage = () => {
                         "New Event Created",
                         `Event "${form.eventTitle}" has been scheduled on ${form.eventDate}.`
                     );
+
+                    const createdEventId = getCreatedEventId(res);
+                    if (createdEventId) {
+                        await createNotification({
+                            title: form.eventTitle,
+                            description: form.eventDescription,
+                            type: "EVENT",
+                            eventId: createdEventId,
+                        });
+                    } else {
+                        console.warn("Notification list insert skipped: create event response did not include eventId.");
+                    }
                 }
-                await fetchEvents(setSaving);
+                await fetchEvents(setSaving, page, limit, search);
                 mixpanel.track("Requested API", {
                     apiName: editing ? "Update Event" : "Create Event",
                     createdBy: user?.id || "Unknown",
@@ -290,7 +376,7 @@ const EventManagementPage = () => {
             setSaving(true);
             const res = await deleteEvent(selectedEventToDelete.eventid);
             if (res.success) {
-                await fetchEvents(setSaving);
+                await fetchEvents(setSaving, page, limit, search);
                 if (selectedEventToDelete.eventImage) {
                     const filename = selectedEventToDelete.eventImage.replace(
                         baseImageURL,
@@ -329,6 +415,8 @@ const EventManagementPage = () => {
             eventDate: formatDateForInput(ev.eventDate),
             eventImage: filename,
             feeType: ev.feeType || "Free", // preserve feeType if exists
+            accessType: normalizeAccessType(ev.accessType),
+            nonMemberFee: ev.nonMemberFee ?? "",
             startTime: convert24To12Hour(ev.startTime), // ← convert 24h to 12h
             endTime: convert24To12Hour(ev.endTime),     // ← convert 24h to 12h
         });
@@ -384,7 +472,7 @@ const EventManagementPage = () => {
                     mb: 5,
                 }}
             >
-                <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+                <Box sx={{ display: "flex", gap: 2, alignItems: "center", flexWrap: "wrap" }}>
                     <Typography variant="h5" fontWeight="bold">
                         Events Management
                     </Typography>
@@ -392,10 +480,37 @@ const EventManagementPage = () => {
                         label="Search Events"
                         variant="outlined"
                         size="small"
-                        value={searchTerm}
-                        sx={{ minWidth: 400 }}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        value={searchInput}
+                        sx={{ minWidth: 320 }}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSearch();
+                        }}
                     />
+                    <Button variant="outlined" onClick={handleSearch} disabled={loading}>
+                        Search
+                    </Button>
+                    <Button variant="text" onClick={handleResetSearch} disabled={loading || (!searchInput && !search)}>
+                        Reset
+                    </Button>
+                    <FormControl size="small" sx={{ minWidth: 110 }}>
+                        <InputLabel id="event-limit-label">Limit</InputLabel>
+                        <Select
+                            labelId="event-limit-label"
+                            value={limit}
+                            label="Limit"
+                            onChange={(e) => {
+                                setPage(1);
+                                setLimit(Number(e.target.value));
+                            }}
+                        >
+                            {[5, 10, 20, 50].map((value) => (
+                                <MenuItem key={value} value={value}>
+                                    {value}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
                 </Box>
                 <Button
                     variant="contained"
@@ -441,8 +556,8 @@ const EventManagementPage = () => {
                             </Box>
                         </Card>
                     ))
-                ) : filteredEvents.length ? (
-                    filteredEvents.map((ev) => (
+                ) : events.length ? (
+                    events.map((ev) => (
                         <Card
                             key={ev.eventid}
                             sx={{
@@ -479,7 +594,11 @@ const EventManagementPage = () => {
                                     <PlaceOutlined fontSize="small" />
                                     <Typography variant="body2">{ev.eventLocation}</Typography>
                                 </Box>
-                                <Typography variant="body2">Fee: {ev.feeType === "Paid" ? ev.eventFee : "Free"}</Typography>
+                                <Typography variant="body2">Member Fee: {ev.feeType === "Paid" ? ev.eventFee : "Free"}</Typography>
+                                <Typography variant="body2">
+                                    Access: {normalizeAccessType(ev.accessType)}
+                                    {normalizeAccessType(ev.accessType) === "All" && ` | Non-member Fee: ${ev.nonMemberFee ?? "Free"}`}
+                                </Typography>
                             </CardContent>
                             <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1, p: 1, borderTop: "1px solid #eee" }}>
                                 <Tooltip title="View Details">
@@ -506,6 +625,35 @@ const EventManagementPage = () => {
                     </Box>
                 )}
             </Box>
+
+            <Stack
+                direction="row"
+                spacing={2}
+                justifyContent="center"
+                alignItems="center"
+                sx={{ mt: 3 }}
+            >
+                <Button
+                    variant="outlined"
+                    onClick={() => setPage((prev) => prev - 1)}
+                    disabled={loading || page <= 1}
+                >
+                    Previous
+                </Button>
+
+                <Typography variant="body2">
+                    Page {pagination.page} of {Math.max(pagination.totalPages || 1, 1)}
+                    {" "} | Total: {pagination.totalCount} events
+                </Typography>
+
+                <Button
+                    variant="outlined"
+                    onClick={() => setPage((prev) => prev + 1)}
+                    disabled={loading || page >= Math.max(pagination.totalPages || 1, 1)}
+                >
+                    Next
+                </Button>
+            </Stack>
 
             {/* Add/Edit Modal */}
             <Dialog open={openModal} onClose={handleClose} maxWidth="sm" fullWidth>
@@ -695,12 +843,51 @@ const EventManagementPage = () => {
                         {/* Event Fee (only if Paid) */}
                         {form.feeType === "Paid" && (
                             <TextField
-                                label="Event Fee"
+                                label="Member Fee"
                                 value={form.eventFee}
                                 disabled={saving}
                                 error={validationErrors.includes("eventFee")}
                                 helperText={validationErrors.includes("eventFee") && "Required"}
-                                onChange={(e) => setForm((f) => ({ ...f, eventFee: e.target.value.replace(/[^0-9]/g, '') }))}
+                                onChange={(e) => setForm((f) => ({ ...f, eventFee: sanitizeFeeInput(e.target.value) }))}
+                            />
+                        )}
+
+                        <FormControl fullWidth error={validationErrors.includes("accessType")}>
+                            <InputLabel id="access-type-label">Access Type</InputLabel>
+                            <Select
+                                labelId="access-type-label"
+                                id="access-type"
+                                value={form.accessType}
+                                disabled={saving}
+                                onChange={(e) =>
+                                    setForm((f) => ({
+                                        ...f,
+                                        accessType: e.target.value,
+                                        nonMemberFee: e.target.value === "All" ? f.nonMemberFee : "",
+                                    }))
+                                }
+                                label="Access Type"
+                            >
+                                {accessTypeOptions.map((opt) => (
+                                    <MenuItem key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                    </MenuItem>
+                                ))}
+                            </Select>
+                            {validationErrors.includes("accessType") && (
+                                <Typography color="error" variant="caption">
+                                    Required
+                                </Typography>
+                            )}
+                        </FormControl>
+
+                        {form.accessType === "All" && (
+                            <TextField
+                                label="Non-member Fee"
+                                value={form.nonMemberFee}
+                                disabled={saving}
+                                helperText="Leave empty if free for non-members"
+                                onChange={(e) => setForm((f) => ({ ...f, nonMemberFee: sanitizeFeeInput(e.target.value) }))}
                             />
                         )}
 

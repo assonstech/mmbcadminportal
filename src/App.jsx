@@ -15,6 +15,9 @@ import MouPartnerPage from './pages/MouPartnerPage.jsx';
 import MemberDirectoryPage from './pages/MemberDirectoryPage.jsx';
 import SeasonalPromotionPage from './pages/SeasonalPromotionPage.jsx';
 import NewsLetterPage from './pages/NewsLetterPage.jsx';
+import NonMemberPage from './pages/NonMemberPage.jsx';
+import PartnerAccountManagementPage from './pages/PartnerAccountManagementPage.jsx';
+import MemberVisitLogsPage from './pages/MemberVisitLogsPage.jsx';
 
 function RequireAuth() {
   const { isAuthenticated, loading } = useAuth();
@@ -27,7 +30,7 @@ function RequireAuth() {
 export default function App() {
   return (
     <AuthProvider>
-      <SessionExpiredDialog /> {/* global dialog */}
+      <SessionExpiredDialog />
 
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -37,8 +40,11 @@ export default function App() {
           <Route path="/" element={<Navigate to="/dashboard/users" replace />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route path="users" element={<UserManagementPage />} />
+            <Route path="non-members" element={<NonMemberPage />} />
             <Route path="events" element={<EventManagementPage />} />
             <Route path="admins" element={<AdminManagementPage />} />
+            <Route path="partner-accounts" element={<PartnerAccountManagementPage />} />
+            <Route path="member-visit-logs" element={<MemberVisitLogsPage />} />
             <Route path="knowledges" element={<KnowledgeSharingPage />} />
             <Route path="ceo" element={<CEOPage />} />
             <Route path="organization" element={<OrganizationChartPage />} />

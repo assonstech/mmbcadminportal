@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
     Box,
     Typography,
@@ -17,6 +17,11 @@ import {
     Snackbar,
     Alert,
     Tooltip,
+    Stack,
+    FormControl,
+    InputLabel,
+    Select,
+    MenuItem,
 } from "@mui/material";
 import { AddCircleOutline, Edit, Close, DeleteOutline } from "@mui/icons-material";
 import { formatDistanceToNow } from "date-fns";
@@ -51,32 +56,75 @@ const KnowledgeSharingPage = () => {
     const [validationErrors, setValidationErrors] = useState([]);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [selectedToDelete, setSelectedToDelete] = useState(null);
-    const [searchTerm, setSearchTerm] = useState("");
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(10);
+    const [searchInput, setSearchInput] = useState("");
+    const [search, setSearch] = useState("");
+    const [pagination, setPagination] = useState({
+        page: 1,
+        limit: 10,
+        totalCount: 0,
+        totalPages: 1,
+    });
     const [viewDetail, setViewDetail] = useState(null);
 
     // 🔹 Fetch Knowledge List
-    const fetchKnowledge = useCallback(async (setLoadingName) => {
+    const fetchKnowledge = useCallback(async (setLoadingName, currentPage = page, currentLimit = limit, currentSearch = search) => {
         try {
             setLoadingName(true);
-            const res = await getAllKnowledge();
+            const res = await getAllKnowledge(currentPage, currentLimit, currentSearch);
             if (res.success) {
-                const data = res.data.map((k) => ({
+                const rows = Array.isArray(res.data)
+                    ? res.data
+                    : res.data?.knowledge || res.data?.posts || res.data?.data || [];
+                const paginationData = res.pagination || res.data?.pagination || res.meta || {};
+                const totalCount = paginationData.totalCount ?? paginationData.total ?? paginationData.count ?? rows.length;
+                const totalPages = paginationData.totalPages
+                    ?? paginationData.pages
+                    ?? (paginationData.totalCount || paginationData.total
+                        ? Math.ceil(totalCount / currentLimit)
+                        : rows.length === currentLimit
+                            ? currentPage + 1
+                            : currentPage);
+                const data = rows.map((k) => ({
                     ...k,
                     image: k.image ? baseImageURL + k.image : null,
                     createdBy: k.createdBy || "Unknown",
                 }));
                 setKnowledgeList(data);
+                setPagination({
+                    page: paginationData.page || currentPage,
+                    limit: paginationData.limit || paginationData.pageSize || currentLimit,
+                    totalCount,
+                    totalPages,
+                });
+            } else {
+                setKnowledgeList([]);
+                setPagination({ page: currentPage, limit: currentLimit, totalCount: 0, totalPages: 1 });
             }
         } catch (err) {
             console.error("Error fetching knowledge:", err);
+            setKnowledgeList([]);
+            setPagination({ page: currentPage, limit: currentLimit, totalCount: 0, totalPages: 1 });
         } finally {
             setLoadingName(false);
         }
-    }, []);
+    }, [page, limit, search]);
 
     useEffect(() => {
-        fetchKnowledge(setLoading);
-    }, [fetchKnowledge]);
+        fetchKnowledge(setLoading, page, limit, search);
+    }, [fetchKnowledge, page, limit, search]);
+
+    const handleSearch = () => {
+        setPage(1);
+        setSearch(searchInput.trim());
+    };
+
+    const handleResetSearch = () => {
+        setSearchInput("");
+        setSearch("");
+        setPage(1);
+    };
 
     // 🔹 Handle Image Upload
     const handleUpload = async (file) => {
@@ -162,7 +210,7 @@ const KnowledgeSharingPage = () => {
                         `A new post has been shared by "${form?.createdBy}": "${form?.content.slice(0, 50)}..."`
                     );
                 }
-                await fetchKnowledge(setActionLoading);
+                await fetchKnowledge(setActionLoading, page, limit, search);
                 handleClose();
                 setSnackbar({
                     open: true,
@@ -190,7 +238,7 @@ const KnowledgeSharingPage = () => {
                     message: "Knowledge deleted successfully",
                     severity: "success",
                 });
-                await fetchKnowledge(setActionLoading);
+                await fetchKnowledge(setActionLoading, page, limit, search);
                 if (selectedToDelete.image) {
                     const filename = selectedToDelete.image.replace(baseImageURL, "");
                     await deleteImage(filename);
@@ -229,17 +277,6 @@ const KnowledgeSharingPage = () => {
         setValidationErrors([]);
     };
 
-    // 🔹 Search Filter
-    const filteredKnowledge = useMemo(
-        () =>
-            knowledgeList.filter(
-                (k) =>
-                    k.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    k.createdBy.toLowerCase().includes(searchTerm.toLowerCase())
-            ),
-        [knowledgeList, searchTerm]
-    );
-
     // 🔹 UI Rendering
     return (
         <Box sx={{ p: 3, position: "relative" }}>
@@ -261,7 +298,7 @@ const KnowledgeSharingPage = () => {
 
             {/* Header */}
             <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 2, top: 0, zIndex: 1000, mb: 5 }}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 2, flexWrap: "wrap" }}>
                     <Typography variant="h5" fontWeight="bold">
                         Working Group Sharing
                     </Typography>
@@ -269,10 +306,37 @@ const KnowledgeSharingPage = () => {
                         label="Search"
                         variant="outlined"
                         size="small"
-                        value={searchTerm}
-                        sx={{ minWidth: 400 }}
-                        onChange={(e) => setSearchTerm(e.target.value)}
+                        value={searchInput}
+                        sx={{ minWidth: 320 }}
+                        onChange={(e) => setSearchInput(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") handleSearch();
+                        }}
                     />
+                    <Button variant="outlined" onClick={handleSearch} disabled={loading}>
+                        Search
+                    </Button>
+                    <Button variant="text" onClick={handleResetSearch} disabled={loading || (!searchInput && !search)}>
+                        Reset
+                    </Button>
+                    <FormControl size="small" sx={{ minWidth: 110 }}>
+                        <InputLabel id="knowledge-limit-label">Limit</InputLabel>
+                        <Select
+                            labelId="knowledge-limit-label"
+                            value={limit}
+                            label="Limit"
+                            onChange={(e) => {
+                                setPage(1);
+                                setLimit(Number(e.target.value));
+                            }}
+                        >
+                            {[5, 10, 20, 50].map((value) => (
+                                <MenuItem key={value} value={value}>
+                                    {value}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
                 </Box>
                 <Button
                     variant="contained"
@@ -319,8 +383,8 @@ const KnowledgeSharingPage = () => {
                             </Box>
                         </Card>
                     ))
-                ) : filteredKnowledge.length ? (
-                    filteredKnowledge.map((k) => (
+                ) : knowledgeList.length ? (
+                    knowledgeList.map((k) => (
                         <Card
                             key={k.id}
                             sx={{
@@ -421,6 +485,35 @@ const KnowledgeSharingPage = () => {
                     </Typography>
                 )}
             </Box>
+
+            <Stack
+                direction="row"
+                spacing={2}
+                justifyContent="center"
+                alignItems="center"
+                sx={{ mt: 3 }}
+            >
+                <Button
+                    variant="outlined"
+                    onClick={() => setPage((prev) => prev - 1)}
+                    disabled={loading || page <= 1}
+                >
+                    Previous
+                </Button>
+
+                <Typography variant="body2">
+                    Page {pagination.page} of {Math.max(pagination.totalPages || 1, 1)}
+                    {" "} | Total: {pagination.totalCount} posts
+                </Typography>
+
+                <Button
+                    variant="outlined"
+                    onClick={() => setPage((prev) => prev + 1)}
+                    disabled={loading || page >= Math.max(pagination.totalPages || 1, 1)}
+                >
+                    Next
+                </Button>
+            </Stack>
 
             {/* Add/Edit Modal */}
             <Dialog open={openModal} onClose={handleClose} maxWidth="sm" fullWidth>

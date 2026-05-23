@@ -1,13 +1,24 @@
 import api from '../config/api';
 
 // Get all knowledge posts
-export const getAllKnowledge = async () => {
+export const getAllKnowledge = async (page = 1, limit = 10, search = '') => {
   try {
-    const res = await api.get('/knowledge');
+    const res = await api.get('/knowledge', {
+      params: { page, limit, search },
+    });
     return res.data;
   } catch (err) {
     console.error('Error fetching knowledge:', err);
-    return { success: false, data: [] };
+    return {
+      success: false,
+      data: [],
+      pagination: {
+        page,
+        limit,
+        totalCount: 0,
+        totalPages: 1,
+      },
+    };
   }
 };
 

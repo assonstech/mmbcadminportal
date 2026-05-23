@@ -9,6 +9,28 @@ export const getMembers = async () => {
     return [];
   }
 };
+
+export const getNonMembers = async (page = 1, limit = 10, search = '') => {
+  try {
+    const res = await api.get('/members/non-members', {
+      params: { page, limit, search }
+    });
+    return res.data;
+  } catch (err) {
+    console.error('Error fetching non-members:', err);
+    return {
+      success: false,
+      message: 'Failed to fetch non-members',
+      data: [],
+      pagination: {
+        page,
+        limit,
+        totalCount: 0,
+        totalPages: 1
+      }
+    };
+  }
+};
 export const getECMembers = async () => {
   try {
     const res = await api.get('/members/ec');
