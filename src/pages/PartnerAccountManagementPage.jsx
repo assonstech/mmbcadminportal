@@ -65,6 +65,12 @@ export default function PartnerAccountManagementPage() {
     setSnackbar({ open: true, message, severity });
   };
 
+  const isFormValid = Boolean(
+    form.username.trim()
+      && form.partnerType.trim()
+      && (form.partnerId || form.password.trim())
+  );
+
   const fetchAccounts = useCallback(async () => {
     setLoading(true);
     try {
@@ -330,26 +336,38 @@ export default function PartnerAccountManagementPage() {
             <TextField
               label="Username"
               value={form.username}
-              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, username: e.target.value }));
+                if (errors.username) setErrors((prev) => ({ ...prev, username: '' }));
+              }}
               error={!!errors.username}
               helperText={errors.username}
+              required
               fullWidth
             />
             <TextField
               label={form.partnerId ? 'New Password' : 'Password'}
               type="password"
               value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, password: e.target.value }));
+                if (errors.password) setErrors((prev) => ({ ...prev, password: '' }));
+              }}
               error={!!errors.password}
               helperText={errors.password || (form.partnerId ? 'Leave empty to keep current password' : '')}
+              required={!form.partnerId}
               fullWidth
             />
             <TextField
               label="Partner Type"
               value={form.partnerType}
-              onChange={(e) => setForm((f) => ({ ...f, partnerType: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, partnerType: e.target.value }));
+                if (errors.partnerType) setErrors((prev) => ({ ...prev, partnerType: '' }));
+              }}
               error={!!errors.partnerType}
               helperText={errors.partnerType}
+              required
               fullWidth
             />
             <TextField
@@ -357,6 +375,7 @@ export default function PartnerAccountManagementPage() {
               label="Status"
               value={form.isActive ? 'Active' : 'Inactive'}
               onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.value === 'Active' }))}
+              required
               fullWidth
             >
               <MenuItem value="Active">Active</MenuItem>
@@ -369,7 +388,7 @@ export default function PartnerAccountManagementPage() {
           <Button
             variant="contained"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || !isFormValid}
             startIcon={saving && <CircularProgress size={18} />}
           >
             {form.partnerId ? 'Update' : 'Create'}

@@ -5,11 +5,11 @@ import axios from 'axios';
 const isProduction = import.meta.env.PROD; // works in Vite
 
 export const baseURL = isProduction
-  ? 'https://assonstech-001-site2.ktempurl.com/api'
+  ? 'https://assonstech-001-site6.ktempurl.com/api'
   : 'http://localhost:3000/api';
 
 export const baseImageURL = isProduction
-  ? 'https://assonstech-001-site2.ktempurl.com/uploads/'
+  ? 'https://assonstech-001-site6.ktempurl.com/uploads/'
   : 'http://localhost:3000/uploads/';
 
 

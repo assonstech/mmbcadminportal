@@ -12,6 +12,7 @@ import MenuIcon from '@mui/icons-material/Menu';
 import { useAuth } from '../auth/AuthContext.jsx';
 import api from '../config/api';
 import { LightbulbCircle,SupervisedUserCircle,PeopleAltTwoTone, PieChartOutlineRounded, DirectionsBoat, Newspaper, PersonOff, LocalOffer, ManageAccounts, QrCodeScanner } from '@mui/icons-material';
+import CommonAlertDialog from '../components/CommonAlertDialog.jsx';
 
 const drawerWidth = 240;
 
@@ -41,6 +42,16 @@ export default function DashboardLayout() {
   const [passForm, setPassForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [formErrors, setFormErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [alertDialog, setAlertDialog] = useState({
+    open: false,
+    title: 'Notice',
+    message: '',
+    color: 'primary',
+  });
+
+  const showAlert = (message, title = 'Notice', color = 'primary') => {
+    setAlertDialog({ open: true, title, message, color });
+  };
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,7 +78,7 @@ export default function DashboardLayout() {
       setChangePassOpen(false);
       setPassForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setFormErrors({});
-      alert("Password changed successfully");
+      showAlert("Password changed successfully", "Success", "success");
     } catch (err) {
       console.error(err);
       setFormErrors({ api: err.response?.data?.message || "Failed to change password" });
@@ -82,6 +93,9 @@ export default function DashboardLayout() {
       <Box sx={{ p: 2 }}>
         <Typography variant="h6" fontWeight={400}>Admin Portal</Typography>
         <Typography variant="caption" color="text.secondary">Dashboard</Typography>
+        <Typography variant="caption" color="text.secondary" display="block">
+          Version 2
+        </Typography>
       </Box>
       <Divider />
 
@@ -236,6 +250,13 @@ export default function DashboardLayout() {
           </Button>
         </DialogActions>
       </Dialog>
+      <CommonAlertDialog
+        open={alertDialog.open}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        color={alertDialog.color}
+        onClose={() => setAlertDialog((prev) => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 }

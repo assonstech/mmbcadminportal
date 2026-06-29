@@ -21,6 +21,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import adminImage from '../assets/adminImage.png';
 import api from '../config/api.js';
 import { sendOTP, verifyOTP } from '../controllers/MemberController.js';
+import CommonAlertDialog from '../components/CommonAlertDialog.jsx';
 
 export default function Login() {
   const theme = useTheme();
@@ -56,13 +57,23 @@ export default function Login() {
   const [resetLoading, setResetLoading] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
+  const [alertDialog, setAlertDialog] = useState({
+    open: false,
+    title: 'Notice',
+    message: '',
+    color: 'primary',
+  });
+
+  const showAlert = (message, title = 'Notice', color = 'primary') => {
+    setAlertDialog({ open: true, title, message, color });
+  };
 
   // ------------------------------
   // SEND OTP (uses resetEmail)
   // ------------------------------
   const handleSendOtp = async () => {
     if (!resetEmail) {
-      alert("Please enter your email first");
+      showAlert("Please enter your email first", "Validation Error", "warning");
       return;
     }
 
@@ -72,11 +83,11 @@ export default function Login() {
     setSendingOtp(false);
 
     if (!res.data?.success) {
-      alert(res.data?.message || "Failed to send OTP");
+      showAlert(res.data?.message || "Failed to send OTP", "Error", "error");
       return;
     }
 
-    alert("OTP sent to your email!");
+    showAlert("OTP sent to your email!", "Success", "success");
 
     // Countdown 60 sec
     setTimer(60);
@@ -157,7 +168,7 @@ export default function Login() {
       } else {
         setError(res.message || 'Login failed');
       }
-    } catch (err) {
+    } catch {
       setError('Login failed');
     } finally {
       setLoading(false);
@@ -385,6 +396,13 @@ export default function Login() {
       >
         <Alert severity="success">{toastMessage}</Alert>
       </Snackbar>
+      <CommonAlertDialog
+        open={alertDialog.open}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        color={alertDialog.color}
+        onClose={() => setAlertDialog((prev) => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 }

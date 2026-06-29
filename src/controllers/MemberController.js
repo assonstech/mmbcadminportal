@@ -157,12 +157,18 @@ export const verifyOTP = async (email, otp) => {
   }
 };
 
-export const sendNotification = async (title, message) => {
+export const sendNotification = async (title, message, memberIds = []) => {
   try {
-    const res = await api.post('/onesignal', {
+    const payload = {
       title,
-      message
-    });
+      message,
+    };
+
+    if (Array.isArray(memberIds) && memberIds.length > 0) {
+      payload.memberIds = memberIds.map(String);
+    }
+
+    const res = await api.post('/onesignal', payload);
     return res.data;
   } catch (err) {
     console.error('OneSignal API error:', err.response?.data || err.message || err);

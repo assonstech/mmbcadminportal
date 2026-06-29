@@ -18,6 +18,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import LanguageIcon from "@mui/icons-material/Language";
 import PersonIcon from "@mui/icons-material/Person";
 import OverlayLoader from "../components/OverlayLoader";
+import CommonAlertDialog from "../components/CommonAlertDialog";
+import CommonConfirmDialog from "../components/CommonConfirmDialog";
 import { baseImageURL } from "../config/api";
 
 import {
@@ -37,6 +39,15 @@ const MemberDirectoryPage = () => {
   const [loading, setLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [alertDialog, setAlertDialog] = useState({
+    open: false,
+    title: "Notice",
+    message: "",
+    color: "primary",
+  });
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [hasExistingLogo, setHasExistingLogo] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -46,6 +57,10 @@ const MemberDirectoryPage = () => {
     logoUrl: null,
     memberIds: [],
   });
+
+  const showAlert = (message, title = "Notice", color = "primary") => {
+    setAlertDialog({ open: true, title, message, color });
+  };
 
   const fetchDirectories = async () => {
     setLoading(true);
@@ -84,7 +99,19 @@ const MemberDirectoryPage = () => {
       logoUrl: null,
       memberIds: [],
     });
+    setSubmitAttempted(false);
+    setHasExistingLogo(false);
   };
+
+  const formErrors = {
+    name: !form.name.trim(),
+    subtitle: !form.subtitle.trim(),
+    description: !form.description.trim(),
+    website: !form.website.trim(),
+    logoUrl: !(form.logoUrl || (editingId && hasExistingLogo)),
+  };
+
+  const isFormValid = !Object.values(formErrors).some(Boolean);
 
   const handleOpenCreate = () => {
     setEditingId(null);
@@ -109,11 +136,13 @@ const MemberDirectoryPage = () => {
           ? dir.members.map((m) => m.memberId)
           : [],
       });
+      setHasExistingLogo(Boolean(dir?.logoUrl));
+      setSubmitAttempted(false);
 
       setOpenDialog(true);
     } catch (error) {
       console.error("Error fetching directory detail:", error);
-      alert("Failed to load directory details");
+      showAlert("Failed to load directory details", "Error", "error");
     } finally {
       setLoading(false);
     }
@@ -126,6 +155,12 @@ const MemberDirectoryPage = () => {
   };
 
   const handleSubmit = async () => {
+    setSubmitAttempted(true);
+    if (!isFormValid) {
+      showAlert("Please fill all required fields", "Validation Error", "warning");
+      return;
+    }
+
     setLoading(true);
     try {
       let res;
@@ -139,35 +174,44 @@ const MemberDirectoryPage = () => {
       if (res?.success) {
         handleCloseDialog();
         await fetchDirectories();
+        showAlert(
+          editingId ? "Member directory updated successfully" : "Member directory created successfully",
+          "Success",
+          "success"
+        );
       } else {
-        alert(res?.message || "Something went wrong");
+        showAlert(res?.message || "No response from server", "Error", "error");
       }
     } catch (error) {
       console.error("Submit error:", error);
-      alert("Something went wrong");
+      showAlert("No response from server", "Error", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
-    const ok = window.confirm("Delete this directory?");
-    if (!ok) return;
+  const handleDelete = (row) => {
+    setDeleteTarget(row);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     setLoading(true);
     try {
-      const res = await deleteMemberDirectory(id);
+      const res = await deleteMemberDirectory(deleteTarget.id);
 
       if (res?.success) {
         await fetchDirectories();
+        showAlert("Member directory deleted successfully", "Success", "success");
       } else {
-        alert(res?.message || "Delete failed");
+        showAlert(res?.message || "Delete failed", "Error", "error");
       }
     } catch (error) {
       console.error("Delete error:", error);
-      alert("Delete failed");
+      showAlert("No response from server while deleting member directory", "Error", "error");
     } finally {
       setLoading(false);
+      setDeleteTarget(null);
     }
   };
 
@@ -299,7 +343,7 @@ const MemberDirectoryPage = () => {
 
           <IconButton
             color="error"
-            onClick={() => handleDelete(params.row.id)}
+            onClick={() => handleDelete(params.row)}
           >
             <DeleteIcon />
           </IconButton>
@@ -400,17 +444,23 @@ const MemberDirectoryPage = () => {
 
           <Stack spacing={2}>
             <TextField
-              label="Name"
+              label="Company Name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               fullWidth
+              required
+              error={submitAttempted && formErrors.name}
+              helperText={submitAttempted && formErrors.name ? "Required" : ""}
             />
 
             <TextField
-              label="Subtitle"
+              label="Position"
               value={form.subtitle}
               onChange={(e) => setForm({ ...form, subtitle: e.target.value })}
               fullWidth
+              required
+              error={submitAttempted && formErrors.subtitle}
+              helperText={submitAttempted && formErrors.subtitle ? "Required" : ""}
             />
 
             <TextField
@@ -420,6 +470,9 @@ const MemberDirectoryPage = () => {
               fullWidth
               multiline
               minRows={3}
+              required
+              error={submitAttempted && formErrors.description}
+              helperText={submitAttempted && formErrors.description ? "Required" : ""}
             />
 
             <TextField
@@ -427,14 +480,18 @@ const MemberDirectoryPage = () => {
               value={form.website}
               onChange={(e) => setForm({ ...form, website: e.target.value })}
               fullWidth
+              required
+              error={submitAttempted && formErrors.website}
+              helperText={submitAttempted && formErrors.website ? "Required" : ""}
             />
 
             <Box>
               <Typography fontWeight={700} mb={1}>
-                Upload Logo
+                Upload Logo <Box component="span" sx={{ color: "error.main" }}>*</Box>
               </Typography>
               <input
                 type="file"
+                accept="image/*"
                 onChange={(e) =>
                   setForm({
                     ...form,
@@ -442,6 +499,11 @@ const MemberDirectoryPage = () => {
                   })
                 }
               />
+              {submitAttempted && formErrors.logoUrl && (
+                <Typography color="error" variant="caption" sx={{ display: "block", mt: 0.5 }}>
+                  Required
+                </Typography>
+              )}
             </Box>
 
             <Box>
@@ -570,6 +632,7 @@ const MemberDirectoryPage = () => {
               <Button
                 variant="contained"
                 onClick={handleSubmit}
+                disabled={!isFormValid || loading}
                 sx={{
                   borderRadius: "10px",
                   textTransform: "none",
@@ -582,6 +645,25 @@ const MemberDirectoryPage = () => {
           </Stack>
         </Box>
       </Dialog>
+
+      <CommonConfirmDialog
+        open={!!deleteTarget}
+        title="Delete Member Directory"
+        message={`Delete "${deleteTarget?.name || "this directory"}"?`}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        loading={loading && !!deleteTarget}
+        confirmText="Delete"
+        confirmColor="error"
+      />
+
+      <CommonAlertDialog
+        open={alertDialog.open}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        color={alertDialog.color}
+        onClose={() => setAlertDialog((prev) => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 };

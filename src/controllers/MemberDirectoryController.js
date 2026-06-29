@@ -32,9 +32,7 @@ export const createMemberDirectory = async (payload) => {
       formData.append("logoUrl", payload.logoUrl);
     }
 
-    (payload.memberIds || []).forEach((id) => {
-      formData.append("memberIds[]", id);
-    });
+    formData.append("memberIds", JSON.stringify(payload.memberIds || []));
 
     const res = await api.post("/member-directories", formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -42,7 +40,10 @@ export const createMemberDirectory = async (payload) => {
     return res.data;
   } catch (error) {
     console.error("Error creating member directory:", error);
-    return { success: false };
+    return {
+      success: false,
+      message: error.response?.data?.message || "No response from server while creating member directory",
+    };
   }
 };
 
@@ -58,9 +59,7 @@ export const updateMemberDirectory = async (id, payload) => {
       formData.append("logoUrl", payload.logoUrl);
     }
 
-    (payload.memberIds || []).forEach((id) => {
-      formData.append("memberIds[]", id);
-    });
+    formData.append("memberIds", JSON.stringify(payload.memberIds || []));
 
     const res = await api.put(`/member-directories/${id}`, formData, {
       headers: { "Content-Type": "multipart/form-data" },
@@ -68,7 +67,10 @@ export const updateMemberDirectory = async (id, payload) => {
     return res.data;
   } catch (error) {
     console.error("Error updating member directory:", error);
-    return { success: false };
+    return {
+      success: false,
+      message: error.response?.data?.message || "No response from server while updating member directory",
+    };
   }
 };
 
@@ -78,6 +80,9 @@ export const deleteMemberDirectory = async (id) => {
     return res.data;
   } catch (error) {
     console.error("Error deleting member directory:", error);
-    return { success: false };
+    return {
+      success: false,
+      message: error.response?.data?.message || "No response from server while deleting member directory",
+    };
   }
 };

@@ -31,6 +31,8 @@ import {
   updateNewsletter,
   removeNewsletterPdf,
 } from '../controllers/NewsLetterController';
+import { sendNotification } from '../controllers/MemberController';
+import { createNotification, getCreatedReferenceId } from '../controllers/NotificationController';
 import CommonAlertDialog from '../components/CommonAlertDialog';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 
@@ -67,6 +69,7 @@ export default function NewsLetterPage() {
   const [form, setForm] = useState(initialForm);
   const [imagePreview, setImagePreview] = useState('');
   const [existingPdfUrl, setExistingPdfUrl] = useState('');
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const [alertDialog, setAlertDialog] = useState({
     open: false,
@@ -145,7 +148,18 @@ export default function NewsLetterPage() {
     setEditingId(null);
     setImagePreview('');
     setExistingPdfUrl('');
+    setSubmitAttempted(false);
   };
+
+  const formErrors = {
+    title: !form.title.trim(),
+    fullDescription: !form.fullDescription.trim(),
+    readMinutes: !form.readMinutes.toString().trim() || Number(form.readMinutes) <= 0,
+    publishedAt: !form.publishedAt,
+    imageUrl: !imagePreview,
+  };
+
+  const isFormValid = !Object.values(formErrors).some(Boolean);
 
   const handleCloseDialog = () => {
     if (submitLoading || removePdfLoading) return;
@@ -171,6 +185,7 @@ export default function NewsLetterPage() {
     });
     setImagePreview(row.imageUrl ? `${baseImageURL}${row.imageUrl}` : '');
     setExistingPdfUrl(row.pdfUrl ? `${baseImageURL}${row.pdfUrl}` : '');
+    setSubmitAttempted(false);
     setOpenDialog(true);
   };
 
@@ -200,11 +215,12 @@ export default function NewsLetterPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.title.trim()) {
+    setSubmitAttempted(true);
+    if (!isFormValid) {
       setAlertDialog({
         open: true,
         title: 'Validation',
-        message: 'Title is required',
+        message: 'Please fill all required fields',
         color: 'warning',
       });
       return;
@@ -224,6 +240,19 @@ export default function NewsLetterPage() {
         : await createNewsletter(payload);
 
       if (res?.success) {
+        if (!editingId) {
+          await sendNotification(
+            'New Newsletter',
+            `"${form.title}" is now available.`
+          );
+          await createNotification({
+            title: form.title,
+            description: form.fullDescription,
+            type: 'NEWSLETTER',
+            referenceId: getCreatedReferenceId(res, ['newsletterId']),
+          });
+        }
+
         setOpenDialog(false);
         resetForm();
         await fetchNewsletters(page, search);
@@ -640,11 +669,12 @@ export default function NewsLetterPage() {
               value={form.title}
               onChange={(e) => handleChange('title', e.target.value)}
               fullWidth
-              required
-              disabled={submitLoading || removePdfLoading}
-              inputProps={{ maxLength: 255 }}
-              helperText={`${form.title.length}/255`}
-            />
+	              required
+	              disabled={submitLoading || removePdfLoading}
+	              inputProps={{ maxLength: 255 }}
+	              error={submitAttempted && formErrors.title}
+	              helperText={submitAttempted && formErrors.title ? 'Required' : `${form.title.length}/255`}
+	            />
 
             <TextField
               label="Full Description"
@@ -652,9 +682,12 @@ export default function NewsLetterPage() {
               onChange={(e) => handleChange('fullDescription', e.target.value)}
               fullWidth
               multiline
-              minRows={6}
-              disabled={submitLoading || removePdfLoading}
-            />
+	              minRows={6}
+	              disabled={submitLoading || removePdfLoading}
+	              required
+	              error={submitAttempted && formErrors.fullDescription}
+	              helperText={submitAttempted && formErrors.fullDescription ? 'Required' : ''}
+	            />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
@@ -663,9 +696,12 @@ export default function NewsLetterPage() {
                 value={form.readMinutes}
                 onChange={(e) => handleChange('readMinutes', e.target.value)}
                 fullWidth
-                disabled={submitLoading || removePdfLoading}
-                inputProps={{ min: 1 }}
-              />
+	                disabled={submitLoading || removePdfLoading}
+	                inputProps={{ min: 1 }}
+	                required
+	                error={submitAttempted && formErrors.readMinutes}
+	                helperText={submitAttempted && formErrors.readMinutes ? 'Required' : ''}
+	              />
 
               <TextField
                 label="Published At"
@@ -673,9 +709,12 @@ export default function NewsLetterPage() {
                 value={form.publishedAt}
                 onChange={(e) => handleChange('publishedAt', e.target.value)}
                 fullWidth
-                disabled={submitLoading || removePdfLoading}
-                InputLabelProps={{ shrink: true }}
-              />
+	                disabled={submitLoading || removePdfLoading}
+	                InputLabelProps={{ shrink: true }}
+	                required
+	                error={submitAttempted && formErrors.publishedAt}
+	                helperText={submitAttempted && formErrors.publishedAt ? 'Required' : ''}
+	              />
             </Stack>
 
             <Divider />
@@ -686,7 +725,9 @@ export default function NewsLetterPage() {
               alignItems={{ xs: 'stretch', md: 'flex-start' }}
             >
               <Stack spacing={1.5} sx={{ flex: 1 }}>
-                <Typography variant="subtitle2">Preview Image</Typography>
+	                <Typography variant="subtitle2">
+	                  Preview Image <Box component="span" sx={{ color: 'error.main' }}>*</Box>
+	                </Typography>
 
                 <Button
                   variant="outlined"
@@ -726,8 +767,13 @@ export default function NewsLetterPage() {
                   >
                     No image selected
                   </Box>
-                )}
-              </Stack>
+	                )}
+	                {submitAttempted && formErrors.imageUrl && (
+	                  <Typography variant="caption" color="error">
+	                    Required
+	                  </Typography>
+	                )}
+	              </Stack>
 
               <Stack spacing={1.5} sx={{ flex: 1 }}>
                 <Typography variant="subtitle2">File (PDF / Word)</Typography>
@@ -757,8 +803,8 @@ export default function NewsLetterPage() {
                       size="small"
                       color="error"
                       onClick={handleRemoveSelectedPdf}
-                      disabled={submitLoading || removePdfLoading}
-                    >
+	            disabled={submitLoading || removePdfLoading || !isFormValid}
+	          >
                       Remove
                     </Button>
                   </Stack>

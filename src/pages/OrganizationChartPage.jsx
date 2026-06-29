@@ -8,6 +8,7 @@ import {
 } from "@mui/material";
 import { getECMembers, updateParentMemberId } from "../controllers/MemberController";
 import api, { baseImageURL } from "../config/api";
+import CommonAlertDialog from "../components/CommonAlertDialog";
 
 export default function OrganizationChartPage() {
     const chartRef = useRef(null);
@@ -17,7 +18,17 @@ export default function OrganizationChartPage() {
     const [editNodeId, setEditNodeId] = useState(null);
     const [parentIdValue, setParentIdValue] = useState("");
     const [saving, setSaving] = useState(false);
+    const [alertDialog, setAlertDialog] = useState({
+        open: false,
+        title: "Notice",
+        message: "",
+        color: "primary",
+    });
     const lastRequestId = useRef(0);
+
+    const showAlert = (message, title = "Notice", color = "primary") => {
+        setAlertDialog({ open: true, title, message, color });
+    };
 
     // Transform API → OrgChart format
     const transformData = (ceoData, ecMembers) => {
@@ -141,13 +152,13 @@ export default function OrganizationChartPage() {
     // Handle Save parent change
     const handleSave = async () => {
         if (!parentIdValue && data.filter(n => n.parentId === null && n.id !== editNodeId).length > 0) {
-            alert("Cannot create multiple root nodes!");
+            showAlert("Cannot create multiple root nodes!", "Validation Error", "warning");
             return;
         }
 
         const descendants = getDescendants(editNodeId, data);
         if (descendants.includes(parentIdValue)) {
-            alert("Cannot set a descendant as parent!");
+            showAlert("Cannot set a descendant as parent!", "Validation Error", "warning");
             return;
         }
 
@@ -165,11 +176,11 @@ export default function OrganizationChartPage() {
                 setEditNodeId(null);
                 setParentIdValue("");
             } else {
-                alert("Failed to update parent. Please try again.");
+                showAlert("Failed to update parent. Please try again.", "Error", "error");
             }
         } catch (err) {
             console.error(err);
-            alert("Error saving parent. Please try again.");
+            showAlert("Error saving parent. Please try again.", "Error", "error");
         } finally {
             setSaving(false);
         }
@@ -236,6 +247,13 @@ export default function OrganizationChartPage() {
                     </Button>
                 </DialogActions>
             </Dialog>
+            <CommonAlertDialog
+                open={alertDialog.open}
+                title={alertDialog.title}
+                message={alertDialog.message}
+                color={alertDialog.color}
+                onClose={() => setAlertDialog((prev) => ({ ...prev, open: false }))}
+            />
         </Box>
     );
 }

@@ -34,6 +34,7 @@ import {
     removeKnowledgePdf,
 } from "../controllers/KnowledgeController";
 import { sendNotification } from "../controllers/MemberController";
+import { createNotification, getCreatedReferenceId } from "../controllers/NotificationController";
 import { baseImageURL } from "../config/api";
 import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
 
@@ -215,6 +216,12 @@ const KnowledgeSharingPage = () => {
                         "New HR Working Post",
                         `A new post has been shared by "${form?.createdBy}": "${form?.content.slice(0, 50)}..."`
                     );
+                    await createNotification({
+                        title: "New Working Group Post",
+                        description: form.content,
+                        type: "KNOWLEDGE",
+                        referenceId: getCreatedReferenceId(res, ["knowledgeId"]),
+                    });
                 }
                 await fetchKnowledge(setActionLoading, page, limit, search);
                 handleClose();

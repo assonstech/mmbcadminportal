@@ -131,18 +131,3 @@ export const updateRegistrationPaidStatus = async (registrationId, isPaid) => {
     return { success: false, message: 'Failed to update paid status', data: null };
   }
 };
-
-export const createNotification = async ({ title, description, type, eventId }) => {
-  try {
-    const res = await api.post('/notifications', {
-      title,
-      description,
-      type,
-      eventId,
-    });
-    return res.data;
-  } catch (err) {
-    console.error('Error creating notification:', err.response?.data || err.message || err);
-    return { success: false, message: 'Failed to create notification' };
-  }
-};

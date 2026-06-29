@@ -39,8 +39,8 @@ import {
     createEvent,
     updateEvent,
     deleteEvent,
-    createNotification,
 } from "../controllers/EventController";
+import { createNotification, getCreatedReferenceId } from "../controllers/NotificationController";
 import api, { baseImageURL } from "../config/api";
 import { deleteImage, sendNotification } from "../controllers/MemberController";
 import DeleteConfirmDialog from "../components/DeleteConfirmDialog";
@@ -68,15 +68,6 @@ const sanitizeFeeInput = (value) => {
     const cleaned = value.replace(/[^0-9.]/g, "");
     const [whole, ...decimals] = cleaned.split(".");
     return decimals.length ? `${whole}.${decimals.join("")}` : whole;
-};
-
-const getCreatedEventId = (res) => {
-    return res?.eventId
-        || res?.eventid
-        || res?.data?.eventId
-        || res?.data?.eventid
-        || res?.data?.id
-        || res?.id;
 };
 
 const formatDateForInput = (isoDate) => {
@@ -323,17 +314,12 @@ const EventManagementPage = () => {
                         `Event "${form.eventTitle}" has been scheduled on ${form.eventDate}.`
                     );
 
-                    const createdEventId = getCreatedEventId(res);
-                    if (createdEventId) {
-                        await createNotification({
-                            title: form.eventTitle,
-                            description: form.eventDescription,
-                            type: "EVENT",
-                            eventId: createdEventId,
-                        });
-                    } else {
-                        console.warn("Notification list insert skipped: create event response did not include eventId.");
-                    }
+                    await createNotification({
+                        title: form.eventTitle,
+                        description: form.eventDescription,
+                        type: "EVENT",
+                        referenceId: getCreatedReferenceId(res, ["eventId", "eventid"]),
+                    });
                 }
                 await fetchEvents(setSaving, page, limit, search);
                 mixpanel.track("Requested API", {

@@ -17,9 +17,12 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { getEventDetail, updateRegistrationPaidStatus } from "../controllers/EventController";
+import { sendNotification } from "../controllers/MemberController";
+import { createNotification } from "../controllers/NotificationController";
 import { baseImageURL } from "../config/api";
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
+import CommonAlertDialog from "./CommonAlertDialog";
 
 const eventTypeOptions = [
     { value: "inPerson", label: "In Person" },
@@ -40,6 +43,16 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
     const [paidChanges, setPaidChanges] = useState({});
     const [loadingChanges, setLoadingChanges] = useState({});
     const [filter, setFilter] = useState("All"); // All, Paid, Unpaid
+    const [alertDialog, setAlertDialog] = useState({
+        open: false,
+        title: "Notice",
+        message: "",
+        color: "primary",
+    });
+
+    const showAlert = (message, title = "Notice", color = "primary") => {
+        setAlertDialog({ open: true, title, message, color });
+    };
 
     const format12HourTime = (time24) => {
         if (!time24) return "-";
@@ -84,7 +97,7 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
         });
 
         if (rows.length === 0) {
-            alert("No data to export");
+            showAlert("No data to export", "Notice", "warning");
             return;
         }
 
@@ -144,6 +157,11 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
     };
 
     const handlePaidSelectChange = (registrationId, value) => {
+        const registration = registrations.find(
+            (reg) => reg.registrationId === registrationId
+        );
+        if (registration?.isPaid) return;
+
         setPaidChanges((prev) => ({
             ...prev,
             [registrationId]: value,
@@ -154,6 +172,11 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
         if (!(registrationId in paidChanges)) return;
 
         const newStatus = paidChanges[registrationId] === "Paid";
+        const registration = registrations.find(
+            (reg) => reg.registrationId === registrationId
+        );
+        const targetUserId = registration?.userId || registration?.memberId;
+        if (!newStatus || registration?.isPaid) return;
 
         try {
             setLoadingChanges((prev) => ({ ...prev, [registrationId]: true }));
@@ -161,6 +184,21 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
             const res = await updateRegistrationPaidStatus(registrationId, newStatus);
 
             if (res.success) {
+                if (targetUserId) {
+                    await sendNotification(
+                        "Payment Confirmed",
+                        `Your payment for "${selectedEvent.eventTitle}" has been confirmed.`,
+                        [targetUserId]
+                    );
+                    await createNotification({
+                        title: "Payment Confirmed",
+                        description: `Your payment for "${selectedEvent.eventTitle}" has been confirmed.`,
+                        type: "PAYMENT",
+                        referenceId: selectedEvent.eventid || selectedEvent.eventId || selectedEvent.id,
+                        userId: targetUserId,
+                    });
+                }
+
                 setRegistrations((prev) =>
                     prev.map((reg) =>
                         reg.registrationId === registrationId ? { ...reg, isPaid: newStatus } : reg
@@ -215,6 +253,7 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
             paidChanges[reg.registrationId] ?? (reg.isPaid ? "Paid" : "Not Paid");
         const showUpdateIcon =
             !reg.isGuest &&
+            !reg.isPaid &&
             paidChanges[reg.registrationId] &&
             paidChanges[reg.registrationId] !== (reg.isPaid ? "Paid" : "Not Paid");
         const isUpdating = loadingChanges[reg.registrationId] || false;
@@ -275,7 +314,7 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
                                     backgroundColor: paidValue === "Paid" ? "#90EE90" : "#FF7F7F",
                                     borderRadius: 1,
                                 }}
-                                disabled={isUpdating}
+                                disabled={isUpdating || reg.isPaid}
                             >
                                 <MenuItem value="Paid">Paid</MenuItem>
                                 <MenuItem value="Not Paid">Not Paid</MenuItem>
@@ -298,25 +337,26 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
     };
 
     return (
-        <Dialog
-            open={!!selectedEvent}
-            onClose={() => setSelectedEvent(null)}
-            maxWidth="lg"
-            fullWidth
-        >
-            {selectedEvent && (
-                <>
-                    <DialogTitle>
-                        {selectedEvent.eventTitle}
-                        <IconButton
-                            onClick={() => setSelectedEvent(null)}
-                            sx={{ position: "absolute", right: 8, top: 8 }}
-                        >
-                            <CloseIcon />
-                        </IconButton>
-                    </DialogTitle>
+        <>
+            <Dialog
+                open={!!selectedEvent}
+                onClose={() => setSelectedEvent(null)}
+                maxWidth="lg"
+                fullWidth
+            >
+                {selectedEvent && (
+                    <>
+                        <DialogTitle>
+                            {selectedEvent.eventTitle}
+                            <IconButton
+                                onClick={() => setSelectedEvent(null)}
+                                sx={{ position: "absolute", right: 8, top: 8 }}
+                            >
+                                <CloseIcon />
+                            </IconButton>
+                        </DialogTitle>
 
-                    <DialogContent dividers>
+                        <DialogContent dividers>
                         <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap", height: "80vh" }}>
                             {/* Event Details */}
                             <Paper
@@ -474,9 +514,17 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
                                 )}
                             </Paper>
                         </Box>
-                    </DialogContent>
-                </>
-            )}
-        </Dialog>
+                        </DialogContent>
+                    </>
+                )}
+            </Dialog>
+            <CommonAlertDialog
+                open={alertDialog.open}
+                title={alertDialog.title}
+                message={alertDialog.message}
+                color={alertDialog.color}
+                onClose={() => setAlertDialog((prev) => ({ ...prev, open: false }))}
+            />
+        </>
     );
 }

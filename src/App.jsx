@@ -18,6 +18,7 @@ import NewsLetterPage from './pages/NewsLetterPage.jsx';
 import NonMemberPage from './pages/NonMemberPage.jsx';
 import PartnerAccountManagementPage from './pages/PartnerAccountManagementPage.jsx';
 import MemberVisitLogsPage from './pages/MemberVisitLogsPage.jsx';
+import UploadSizeGuard from './components/UploadSizeGuard.jsx';
 
 function RequireAuth() {
   const { isAuthenticated, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
   return (
     <AuthProvider>
       <SessionExpiredDialog />
+      <UploadSizeGuard />
 
       <Routes>
         <Route path="/login" element={<Login />} />

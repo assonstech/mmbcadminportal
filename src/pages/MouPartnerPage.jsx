@@ -36,6 +36,8 @@ import {
   deleteMouPartner,
 } from '../controllers/MouPartnerController';
 import OverlayLoader from '../components/OverlayLoader';
+import CommonAlertDialog from '../components/CommonAlertDialog';
+import CommonConfirmDialog from '../components/CommonConfirmDialog';
 
 const initialForm = {
   name: '',
@@ -53,6 +55,28 @@ export default function MouPartnerPage() {
   const [form, setForm] = useState(initialForm);
   const [previewUrl, setPreviewUrl] = useState('');
   const [search, setSearch] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [hasExistingIcon, setHasExistingIcon] = useState(false);
+  const [alertDialog, setAlertDialog] = useState({
+    open: false,
+    title: 'Notice',
+    message: '',
+    color: 'primary',
+  });
+
+  const showAlert = (message, title = 'Notice', color = 'primary') => {
+    setAlertDialog({ open: true, title, message, color });
+  };
+
+  const formErrors = {
+    name: !form.name.trim(),
+    category: !form.category.trim(),
+    websiteLink: !form.websiteLink.trim(),
+    iconUrl: !(form.iconUrl || (editId && hasExistingIcon)),
+  };
+
+  const isFormValid = !Object.values(formErrors).some(Boolean);
 
   useEffect(() => {
     fetchPartners(true);
@@ -95,11 +119,11 @@ export default function MouPartnerPage() {
       if (result.success) {
         setPartners(Array.isArray(result.data) ? result.data : []);
       } else {
-        alert(result.message || 'Failed to fetch MOU partners');
+        showAlert(result.message || 'Failed to fetch MOU partners', 'Error', 'error');
       }
     } catch (err) {
       console.error('fetchPartners error:', err);
-      alert('Failed to fetch MOU partners');
+      showAlert('Failed to fetch MOU partners', 'Error', 'error');
     } finally {
       if (showLoader) {
         setLoading(false);
@@ -113,6 +137,8 @@ export default function MouPartnerPage() {
     setEditId(null);
     setForm(initialForm);
     setPreviewUrl('');
+    setHasExistingIcon(false);
+    setSubmitAttempted(false);
     setDialogOpen(true);
   };
 
@@ -126,6 +152,8 @@ export default function MouPartnerPage() {
       iconUrl: null,
     });
     setPreviewUrl(item.iconUrl || '');
+    setHasExistingIcon(Boolean(item.iconUrl));
+    setSubmitAttempted(false);
     setDialogOpen(true);
   };
 
@@ -135,6 +163,8 @@ export default function MouPartnerPage() {
     setEditId(null);
     setForm(initialForm);
     setPreviewUrl('');
+    setHasExistingIcon(false);
+    setSubmitAttempted(false);
   };
 
   const handleChange = (e) => {
@@ -159,14 +189,10 @@ export default function MouPartnerPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSubmitAttempted(true);
 
-    if (!form.name?.trim() || !form.category?.trim() || !form.websiteLink?.trim()) {
-      alert('Name, category and website link are required');
-      return;
-    }
-
-    if (!editId && !form.iconUrl) {
-      alert('Icon image is required');
+    if (!isFormValid) {
+      showAlert('Please fill all required fields', 'Validation Error', 'warning');
       return;
     }
 
@@ -183,42 +209,48 @@ export default function MouPartnerPage() {
         setEditId(null);
         setForm(initialForm);
         setPreviewUrl('');
+        setHasExistingIcon(false);
+        setSubmitAttempted(false);
         await fetchPartners(false);
+        showAlert(editId ? 'MOU partner updated successfully' : 'MOU partner created successfully', 'Success', 'success');
       } else {
-        alert(result.message || 'Something went wrong');
+        showAlert(result.message || 'Something went wrong', 'Error', 'error');
       }
     } catch (err) {
       console.error('handleSubmit error:', err);
-      alert('Request failed');
+      showAlert('Request failed', 'Error', 'error');
     } finally {
       setLoading(false);
       setLoadingMessage('Loading...');
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (item) => {
     if (loading) return;
+    setDeleteTarget(item);
+  };
 
-    const ok = window.confirm('Are you sure you want to delete this partner?');
-    if (!ok) return;
-
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
     try {
       setLoadingMessage('Deleting partner...');
       setLoading(true);
 
-      const result = await deleteMouPartner(id);
+      const result = await deleteMouPartner(deleteTarget.id);
 
       if (result.success) {
         await fetchPartners(false);
+        showAlert('MOU partner deleted successfully', 'Success', 'success');
       } else {
-        alert(result.message || 'Delete failed');
+        showAlert(result.message || 'Delete failed', 'Error', 'error');
       }
     } catch (err) {
       console.error('handleDelete error:', err);
-      alert('Delete failed');
+      showAlert('Delete failed', 'Error', 'error');
     } finally {
       setLoading(false);
       setLoadingMessage('Loading...');
+      setDeleteTarget(null);
     }
   };
 
@@ -357,7 +389,7 @@ export default function MouPartnerPage() {
           </IconButton>
 
           <IconButton
-            onClick={() => handleDelete(params.row.id)}
+            onClick={() => handleDelete(params.row.raw)}
             disabled={loading}
             sx={{
               width: 36,
@@ -744,11 +776,14 @@ export default function MouPartnerPage() {
             <Stack spacing={2}>
               <TextField
                 label="Partner Name"
-                name="name"
-                value={form.name}
-                onChange={handleChange}
-                fullWidth
-                InputProps={{
+	                name="name"
+	                value={form.name}
+	                onChange={handleChange}
+	                fullWidth
+	                required
+	                error={submitAttempted && formErrors.name}
+	                helperText={submitAttempted && formErrors.name ? 'Required' : ''}
+	                InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
                       <BusinessIcon sx={{ color: '#94a3b8' }} />
@@ -764,11 +799,14 @@ export default function MouPartnerPage() {
 
               <TextField
                 label="Category"
-                name="category"
-                value={form.category}
-                onChange={handleChange}
-                fullWidth
-                InputProps={{
+	                name="category"
+	                value={form.category}
+	                onChange={handleChange}
+	                fullWidth
+	                required
+	                error={submitAttempted && formErrors.category}
+	                helperText={submitAttempted && formErrors.category ? 'Required' : ''}
+	                InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
                       <CategoryOutlinedIcon sx={{ color: '#94a3b8' }} />
@@ -784,11 +822,14 @@ export default function MouPartnerPage() {
 
               <TextField
                 label="Website Link"
-                name="websiteLink"
-                value={form.websiteLink}
-                onChange={handleChange}
-                fullWidth
-                InputProps={{
+	                name="websiteLink"
+	                value={form.websiteLink}
+	                onChange={handleChange}
+	                fullWidth
+	                required
+	                error={submitAttempted && formErrors.websiteLink}
+	                helperText={submitAttempted && formErrors.websiteLink ? 'Required' : ''}
+	                InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
                       <LanguageIcon sx={{ color: '#94a3b8' }} />
@@ -810,10 +851,10 @@ export default function MouPartnerPage() {
                   border: '1px solid #e5e7eb',
                   bgcolor: '#f8fafc',
                 }}
-              >
-                <Typography variant="body2" fontWeight={800} mb={1.5}>
-                  Partner Icon
-                </Typography>
+	              >
+	                <Typography variant="body2" fontWeight={800} mb={1.5}>
+	                  Partner Icon <Box component="span" sx={{ color: 'error.main' }}>*</Box>
+	                </Typography>
 
                 <Stack
                   direction={{ xs: 'column', sm: 'row' }}
@@ -856,10 +897,15 @@ export default function MouPartnerPage() {
                       />
                     </Button>
 
-                    <Typography variant="caption" sx={{ color: '#64748b' }}>
-                      Supported: PNG, JPG, WEBP, SVG
-                    </Typography>
-                  </Stack>
+	                    <Typography variant="caption" sx={{ color: '#64748b' }}>
+	                      Supported: PNG, JPG, WEBP, SVG
+	                    </Typography>
+	                    {submitAttempted && formErrors.iconUrl && (
+	                      <Typography variant="caption" color="error">
+	                        Required
+	                      </Typography>
+	                    )}
+	                  </Stack>
                 </Stack>
               </Paper>
             </Stack>
@@ -882,9 +928,9 @@ export default function MouPartnerPage() {
           </Button>
 
           <Button
-            type="submit"
-            form="partner-form"
-            disabled={loading}
+	            type="submit"
+	            form="partner-form"
+	            disabled={loading || !isFormValid}
             variant="contained"
             sx={{
               borderRadius: 2,
@@ -905,6 +951,25 @@ export default function MouPartnerPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <CommonConfirmDialog
+        open={!!deleteTarget}
+        title="Delete MOU Partner"
+        message={`Delete "${deleteTarget?.name || 'this partner'}"?`}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+        loading={loading && !!deleteTarget}
+        confirmText="Delete"
+        confirmColor="error"
+      />
+
+      <CommonAlertDialog
+        open={alertDialog.open}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        color={alertDialog.color}
+        onClose={() => setAlertDialog((prev) => ({ ...prev, open: false }))}
+      />
     </Box>
   );
 }

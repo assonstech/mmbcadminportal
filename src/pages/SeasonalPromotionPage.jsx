@@ -10,7 +10,6 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControlLabel,
   IconButton,
   Paper,
   Stack,
@@ -31,6 +30,8 @@ import {
   getAllSeasonalPromotions,
   updateSeasonalPromotion,
 } from '../controllers/SeasonalPromotionController';
+import { sendNotification } from '../controllers/MemberController';
+import { createNotification, getCreatedReferenceId } from '../controllers/NotificationController';
 import CommonAlertDialog from '../components/CommonAlertDialog';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 
@@ -57,6 +58,7 @@ export default function SeasonalPromotionPage() {
   const [form, setForm] = useState(initialForm);
   const [imagePreview, setImagePreview] = useState('');
   const [existingPdfUrl, setExistingPdfUrl] = useState('');
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   const [alertDialog, setAlertDialog] = useState({
     open: false,
@@ -109,7 +111,19 @@ export default function SeasonalPromotionPage() {
     setEditingId(null);
     setImagePreview('');
     setExistingPdfUrl('');
+    setSubmitAttempted(false);
   };
+
+  const formErrors = {
+    title: !form.title.trim(),
+    shortDescription: !form.shortDescription.trim(),
+    fullDescription: !form.fullDescription.trim(),
+    startDate: !form.startDate,
+    endDate: !form.endDate,
+    imageUrl: !imagePreview,
+  };
+
+  const isFormValid = !Object.values(formErrors).some(Boolean);
 
   const handleCloseDialog = () => {
     if (submitLoading) return;
@@ -136,6 +150,7 @@ export default function SeasonalPromotionPage() {
     });
     setImagePreview(row.imageUrl ? `${baseImageURL}${row.imageUrl}` : '');
     setExistingPdfUrl(row.pdfUrl ? `${baseImageURL}${row.pdfUrl}` : '');
+    setSubmitAttempted(false);
     setOpenDialog(true);
   };
 
@@ -168,11 +183,12 @@ export default function SeasonalPromotionPage() {
   };
 
   const handleSubmit = async () => {
-    if (!form.title.trim()) {
+    setSubmitAttempted(true);
+    if (!isFormValid) {
       setAlertDialog({
         open: true,
         title: 'Validation',
-        message: 'Title is required',
+        message: 'Please fill all required fields',
         color: 'warning',
       });
       return;
@@ -193,6 +209,19 @@ export default function SeasonalPromotionPage() {
         : await createSeasonalPromotion(payload);
 
       if (res?.success) {
+        if (!editingId) {
+          await sendNotification(
+            'New Seasonal Promotion',
+            `"${form.title}" is now available.`
+          );
+          await createNotification({
+            title: form.title,
+            description: form.shortDescription || form.fullDescription,
+            type: 'SEASONALPROMOTION',
+            referenceId: getCreatedReferenceId(res, ['promotionId', 'seasonalPromotionId']),
+          });
+        }
+
         setOpenDialog(false);
         resetForm();
         await fetchPromotions();
@@ -459,10 +488,12 @@ export default function SeasonalPromotionPage() {
               label="Title"
               value={form.title}
               onChange={(e) => handleChange('title', e.target.value)}
-              fullWidth
-              required
-              disabled={submitLoading}
-            />
+	              fullWidth
+	              required
+	              disabled={submitLoading}
+	              error={submitAttempted && formErrors.title}
+	              helperText={submitAttempted && formErrors.title ? 'Required' : ''}
+	            />
 
             <TextField
               label="Short Description"
@@ -470,9 +501,12 @@ export default function SeasonalPromotionPage() {
               onChange={(e) => handleChange('shortDescription', e.target.value)}
               fullWidth
               multiline
-              minRows={2}
-              disabled={submitLoading}
-            />
+	              minRows={2}
+	              disabled={submitLoading}
+	              required
+	              error={submitAttempted && formErrors.shortDescription}
+	              helperText={submitAttempted && formErrors.shortDescription ? 'Required' : ''}
+	            />
 
             <TextField
               label="Full Description"
@@ -480,9 +514,12 @@ export default function SeasonalPromotionPage() {
               onChange={(e) => handleChange('fullDescription', e.target.value)}
               fullWidth
               multiline
-              minRows={4}
-              disabled={submitLoading}
-            />
+	              minRows={4}
+	              disabled={submitLoading}
+	              required
+	              error={submitAttempted && formErrors.fullDescription}
+	              helperText={submitAttempted && formErrors.fullDescription ? 'Required' : ''}
+	            />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
               <TextField
@@ -491,9 +528,12 @@ export default function SeasonalPromotionPage() {
                 value={form.startDate}
                 onChange={(e) => handleChange('startDate', e.target.value)}
                 fullWidth
-                disabled={submitLoading}
-                InputLabelProps={{ shrink: true }}
-              />
+	                disabled={submitLoading}
+	                InputLabelProps={{ shrink: true }}
+	                required
+	                error={submitAttempted && formErrors.startDate}
+	                helperText={submitAttempted && formErrors.startDate ? 'Required' : ''}
+	              />
 
               <TextField
                 label="End Date"
@@ -501,21 +541,22 @@ export default function SeasonalPromotionPage() {
                 value={form.endDate}
                 onChange={(e) => handleChange('endDate', e.target.value)}
                 fullWidth
-                disabled={submitLoading}
-                InputLabelProps={{ shrink: true }}
-              />
+	                disabled={submitLoading}
+	                InputLabelProps={{ shrink: true }}
+	                required
+	                error={submitAttempted && formErrors.endDate}
+	                helperText={submitAttempted && formErrors.endDate ? 'Required' : ''}
+	              />
             </Stack>
 
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={form.isActive}
-                  onChange={(e) => handleChange('isActive', e.target.checked)}
-                  disabled={submitLoading}
-                />
-              }
-              label="Active"
-            />
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <Switch
+                checked={form.isActive}
+                onChange={(e) => handleChange('isActive', e.target.checked)}
+                disabled={submitLoading}
+              />
+              <Typography>Active</Typography>
+            </Stack>
 
             <Stack
               direction={{ xs: 'column', md: 'row' }}
@@ -523,7 +564,9 @@ export default function SeasonalPromotionPage() {
               alignItems={{ xs: 'stretch', md: 'flex-start' }}
             >
               <Stack spacing={1.5} sx={{ flex: 1 }}>
-                <Typography variant="subtitle2">Preview Image</Typography>
+	                <Typography variant="subtitle2">
+	                  Preview Image <Box component="span" sx={{ color: 'error.main' }}>*</Box>
+	                </Typography>
 
                 <Button variant="outlined" component="label" disabled={submitLoading}>
                   Upload Image
@@ -559,8 +602,13 @@ export default function SeasonalPromotionPage() {
                   >
                     No image selected
                   </Box>
-                )}
-              </Stack>
+	                )}
+	                {submitAttempted && formErrors.imageUrl && (
+	                  <Typography variant="caption" color="error">
+	                    Required
+	                  </Typography>
+	                )}
+	              </Stack>
 
               <Stack spacing={1.5} sx={{ flex: 1 }}>
                 <Typography variant="subtitle2">PDF File</Typography>
@@ -609,7 +657,7 @@ export default function SeasonalPromotionPage() {
             Cancel
           </Button>
 
-          <Button variant="contained" onClick={handleSubmit} disabled={submitLoading}>
+	          <Button variant="contained" onClick={handleSubmit} disabled={submitLoading || !isFormValid}>
             {submitLoading ? (
               <CircularProgress size={20} color="inherit" />
             ) : editingId ? (
@@ -654,4 +702,3 @@ function formatDateTimeLocal(value) {
   const local = new Date(date.getTime() - offset * 60000);
   return local.toISOString().slice(0, 16);
 }
-
