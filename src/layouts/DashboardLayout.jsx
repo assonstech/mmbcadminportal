@@ -94,7 +94,7 @@ export default function DashboardLayout() {
         <Typography variant="h6" fontWeight={400}>Admin Portal</Typography>
         <Typography variant="caption" color="text.secondary">Dashboard</Typography>
         <Typography variant="caption" color="text.secondary" display="block">
-          Version 2
+          Version 2.0
         </Typography>
       </Box>
       <Divider />

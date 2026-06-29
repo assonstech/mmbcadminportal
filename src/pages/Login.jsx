@@ -239,6 +239,7 @@ export default function Login() {
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
+            position: 'relative',
             borderRadius: { xs: '0 0 16px 16px', md: '0 16px 16px 0' },
           }}
         >
@@ -294,6 +295,14 @@ export default function Login() {
               </Button>
             </Box>
           </Box>
+
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ position: 'absolute', bottom: 20, left: 0, right: 0, textAlign: 'center' }}
+          >
+            Version 2.0
+          </Typography>
         </Box>
       </Box>
 
