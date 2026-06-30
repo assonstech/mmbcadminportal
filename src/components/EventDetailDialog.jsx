@@ -54,6 +54,20 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
         setAlertDialog({ open: true, title, message, color });
     };
 
+    const memberHasFee = Number(selectedEvent?.eventFee) > 0;
+    const nonMemberHasFee = Number(selectedEvent?.nonMemberFee) > 0;
+    const hasAnyRegistrationFee = memberHasFee || nonMemberHasFee;
+
+    const isMemberRegistration = (reg) => {
+        if (reg.userType?.toUpperCase() === "NON_MEMBER") return false;
+        if (reg.userType?.toUpperCase() === "MEMBER") return true;
+        if (reg.isNonMember === true || reg.isMember === false || reg.nonMemberId) return false;
+        return Boolean(reg.memberId);
+    };
+
+    const registrationRequiresPayment = (reg) =>
+        isMemberRegistration(reg) ? memberHasFee : nonMemberHasFee;
+
     const format12HourTime = (time24) => {
         if (!time24) return "-";
         const [hStr, mStr] = time24.split(":");
@@ -70,6 +84,7 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
 
     useEffect(() => {
         if (selectedEvent?.eventid) {
+            setFilter("All");
             fetchEventDetail(selectedEvent.eventid);
         }
     }, [selectedEvent]);
@@ -222,17 +237,12 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
 
     // Filter registrations based on selected filter
     const filteredRegistrations = registrations.filter((reg) => {
+        if (!hasAnyRegistrationFee || filter === "All") return true;
+        if (!registrationRequiresPayment(reg)) return false;
         if (filter === "Paid") return reg.isPaid;
         if (filter === "Unpaid") return !reg.isPaid;
-        return true; // All
+        return true;
     });
-
-    const isMemberRegistration = (reg) => {
-        if (reg.userType?.toUpperCase() === "NON_MEMBER") return false;
-        if (reg.userType?.toUpperCase() === "MEMBER") return true;
-        if (reg.isNonMember === true || reg.isMember === false || reg.nonMemberId) return false;
-        return Boolean(reg.memberId);
-    };
 
     const memberRegistrations = filteredRegistrations.filter(isMemberRegistration);
 
@@ -249,6 +259,7 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
     ];
 
     const renderRegistrationCard = (reg, type) => {
+        const requiresPayment = type === "member" ? memberHasFee : nonMemberHasFee;
         const paidValue =
             paidChanges[reg.registrationId] ?? (reg.isPaid ? "Paid" : "Not Paid");
         const showUpdateIcon =
@@ -302,7 +313,7 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
                         )}
                     </Box>
 
-                    {!reg.isGuest && selectedEvent.feeType === "Paid" && (
+                    {!reg.isGuest && requiresPayment && (
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
                             <Select
                                 value={paidValue}
@@ -445,15 +456,17 @@ export default function EventDetailDialog({ selectedEvent, setSelectedEvent }) {
                                 >
                                     <Typography variant="h6">Registered Members</Typography>
                                     <Box sx={{ display: "flex", gap: 1 }}>
-                                        <Select
-                                            value={filter}
-                                            onChange={(e) => setFilter(e.target.value)}
-                                            sx={{ minWidth: 120 }}
-                                        >
-                                            <MenuItem value="All">All</MenuItem>
-                                            <MenuItem value="Paid">Paid</MenuItem>
-                                            <MenuItem value="Unpaid">Unpaid</MenuItem>
-                                        </Select>
+                                        {hasAnyRegistrationFee && (
+                                            <Select
+                                                value={filter}
+                                                onChange={(e) => setFilter(e.target.value)}
+                                                sx={{ minWidth: 120 }}
+                                            >
+                                                <MenuItem value="All">All</MenuItem>
+                                                <MenuItem value="Paid">Paid</MenuItem>
+                                                <MenuItem value="Unpaid">Unpaid</MenuItem>
+                                            </Select>
+                                        )}
                                         <Button
                                             variant="contained"
                                             onClick={handleExportExcel}
