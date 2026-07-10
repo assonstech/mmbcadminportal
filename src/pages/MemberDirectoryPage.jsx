@@ -107,7 +107,6 @@ const MemberDirectoryPage = () => {
     name: !form.name.trim(),
     subtitle: !form.subtitle.trim(),
     description: !form.description.trim(),
-    website: !form.website.trim(),
     logoUrl: !(form.logoUrl || (editingId && hasExistingLogo)),
   };
 
@@ -480,9 +479,6 @@ const MemberDirectoryPage = () => {
               value={form.website}
               onChange={(e) => setForm({ ...form, website: e.target.value })}
               fullWidth
-              required
-              error={submitAttempted && formErrors.website}
-              helperText={submitAttempted && formErrors.website ? "Required" : ""}
             />
 
             <Box>

@@ -11,7 +11,6 @@ import {
 import MemberFormDialog from '../components/usermanagement/MemberFormDialog';
 import {
   DataGrid,
-  GridToolbar,
   GridActionsCellItem
 } from '@mui/x-data-grid';
 import { useMembers } from '../hooks/useMember';
@@ -49,6 +48,7 @@ export default function UserManagementPage() {
     natureOfBusiness: "",
     applicantSignatureImage: "",
     isBOD: false,
+    userType: "MEMBER",
     status: "Approved",
     createdBy: "",
     createdDate: "",
@@ -68,8 +68,8 @@ export default function UserManagementPage() {
     applicationDate: "",
     startDate: "",
     endDate: "",
-    parentMemberId: null,
     ecPosition: "",
+    orgChartRow: "",
     isCEO: false,
     documentType: 'nrc'
   };
@@ -159,8 +159,8 @@ export default function UserManagementPage() {
       if (!form.ecPosition) {
         tempErrors.ecPosition = "EC Position is required for BOD members";
       }
-      if (!form.parentMemberId) {
-        tempErrors.parentMemberId = "Parent Member is required for BOD members";
+      if (!form.orgChartRow) {
+        tempErrors.orgChartRow = "Organization chart row is required for EC members";
       }
     }
 
@@ -220,7 +220,19 @@ export default function UserManagementPage() {
 
       if (!payload.isBOD) {
         payload.ecPosition = "";
-        payload.parentMemberId = null;
+        payload.orgChartRow = "";
+      }
+
+      if (!form.memberId) {
+        payload.userType = "MEMBER";
+      }
+      
+      // Existing record
+      if (form.memberId) {
+        if (payload.status === "Approved") {
+          payload.userType = "MEMBER";
+        }
+      
       }
 
       if (form.memberId) {
@@ -231,13 +243,14 @@ export default function UserManagementPage() {
       }
 
       if (response) {
+        const savedMember = response.data || response;
         if (form.memberId) {
-          setRows(prev => prev.map(r => r.memberId === form.memberId ? { ...form } : r));
+          setRows(prev => prev.map(r => r.memberId === form.memberId ? { ...form, ...savedMember } : r));
           showSnackbar("Updated successfully!");
         } else {
           setRows(prev => [
             ...prev,
-            { ...form, memberId: response.memberId || (prev.length ? Math.max(...prev.map(r => r.memberId)) + 1 : 1) }
+            { ...form, ...savedMember, memberId: response.memberId || savedMember.memberId || (prev.length ? Math.max(...prev.map(r => r.memberId)) + 1 : 1) }
           ]);
           showSnackbar("Saved successfully!");
         }

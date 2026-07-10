@@ -95,15 +95,16 @@ export const updateMember = async (memberId, postBody) => {
   }
 };
 
-
-export const updateParentMemberId = async (memberId, parentMemberId) => {
+export const updateOrgChartSort = async (row, memberIds) => {
   try {
-    const res = await api.put(`/members/update-parent/${memberId}`, {
-      parentMemberId: parentMemberId
+    const res = await api.put('/members/org-chart/sort', {
+      row,
+      memberIds
     });
     return res.data;
   } catch (err) {
-    console.error(err);
+    console.error('Error updating organization chart sort:', err.response?.data || err.message || err);
+    return { success: false, message: err.response?.data?.message || err.message || 'Failed to update organization chart sort' };
   }
 };
 

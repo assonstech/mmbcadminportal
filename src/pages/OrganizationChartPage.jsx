@@ -1,252 +1,380 @@
-import React, { useEffect, useRef, useState } from "react";
-import { OrgChart } from "d3-org-chart";
-import * as d3 from "d3";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Dialog, DialogTitle, DialogContent, DialogActions, Button,
-    FormControl, InputLabel, Select, MenuItem, Typography,
-    Avatar, Box, CircularProgress,
+    Avatar,
+    Box,
+    Button,
+    Chip,
+    CircularProgress,
+    Divider,
+    IconButton,
+    Paper,
+    Stack,
+    Tab,
+    Tabs,
+    Typography,
 } from "@mui/material";
-import { getECMembers, updateParentMemberId } from "../controllers/MemberController";
-import api, { baseImageURL } from "../config/api";
+import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
+import SaveIcon from "@mui/icons-material/Save";
+import GroupsIcon from "@mui/icons-material/Groups";
+import WorkspacePremiumIcon from "@mui/icons-material/WorkspacePremium";
+import AccountTreeIcon from "@mui/icons-material/AccountTree";
+import { getECMembers, updateOrgChartSort } from "../controllers/MemberController";
+import { baseImageURL } from "../config/api";
 import CommonAlertDialog from "../components/CommonAlertDialog";
 
+const ORG_ROWS = [
+    { key: "PRESIDENT", title: "President", subtitle: "President Row", icon: <WorkspacePremiumIcon /> },
+    { key: "BOD", title: "BOD", subtitle: "BOD Row", icon: <GroupsIcon /> },
+    { key: "EC", title: "EC", subtitle: "EC Row", icon: <AccountTreeIcon /> },
+];
+
+const groupMembersByRow = (members) => {
+    const grouped = ORG_ROWS.reduce((acc, row) => ({ ...acc, [row.key]: [] }), {});
+
+    members.forEach((member) => {
+        const row = String(member.orgChartRow || "").toUpperCase();
+        if (grouped[row]) grouped[row].push(member);
+    });
+
+    ORG_ROWS.forEach((row) => {
+        grouped[row.key].sort((a, b) => {
+            const sortA = Number(a.orgChartSortOrder) || 9999;
+            const sortB = Number(b.orgChartSortOrder) || 9999;
+            return sortA - sortB || Number(a.memberId) - Number(b.memberId);
+        });
+    });
+
+    return grouped;
+};
+
 export default function OrganizationChartPage() {
-    const chartRef = useRef(null);
-    const chartInstance = useRef(null);
-    const [data, setData] = useState([]);
+    const [rows, setRows] = useState(() => groupMembersByRow([]));
+    const [originalRows, setOriginalRows] = useState(() => groupMembersByRow([]));
     const [loading, setLoading] = useState(true);
-    const [editNodeId, setEditNodeId] = useState(null);
-    const [parentIdValue, setParentIdValue] = useState("");
-    const [saving, setSaving] = useState(false);
+    const [savingRow, setSavingRow] = useState("");
+    const [activeTab, setActiveTab] = useState("PRESIDENT");
     const [alertDialog, setAlertDialog] = useState({
         open: false,
         title: "Notice",
         message: "",
         color: "primary",
     });
-    const lastRequestId = useRef(0);
 
     const showAlert = (message, title = "Notice", color = "primary") => {
         setAlertDialog({ open: true, title, message, color });
     };
 
-    // Transform API → OrgChart format
-    const transformData = (ceoData, ecMembers) => {
-        // Find the CEO in the member list
-        const ceoMember = ecMembers.find(member => member.memberId === ceoData.memberId);
-
-        // CEO node using name and image from member list
-        const ceoId = `${ceoData.memberId}`;
-        const ceoNode = {
-            id: ceoId,
-            parentId: null,
-            name: ceoMember?.representiveName || "CEO",
-            title: ceoMember?.ecPosition || "CEO",
-            image: ceoMember?.companyOrIndividualImage
-                ? `${baseImageURL}${ceoMember.companyOrIndividualImage}`
-                : "https://i.pravatar.cc/100",
-        };
-
-        // Secretaries always under CEO
-        const secretaryNodes = (ceoData.Secretaries || []).map((sec, index) => ({
-            id: `sec-${index}`,
-            parentId: ceoId,
-            name: sec.name,
-            title: "Secretary",
-            image: sec.photoPath ? `${baseImageURL}${sec.photoPath}` : "https://i.pravatar.cc/100",
-            isSecretary: true,
-        }));
-
-        // EC Members: exclude CEO from EC list to avoid duplication
-        const ecNodes = (ecMembers || [])
-            .filter(item => item.memberId !== ceoData.memberId)
-            .map(item => ({
-                id: `${item.memberId}`,
-                parentId: (!item.parentMemberId || item.parentMemberId === ceoData.memberId)
-                    ? ceoId
-                    : `${item.parentMemberId}`,
-                name: item.representiveName || "Unnamed Member",
-                title: item.ecPosition || "Member",
-                image: item.companyOrIndividualImage
-                    ? `${baseImageURL}${item.companyOrIndividualImage}`
-                    : "https://i.pravatar.cc/100",
-            }));
-
-        return [ceoNode, ...ecNodes, ...secretaryNodes];
-    };
-
-
-
-    // Get descendants for cycle check
-    const getDescendants = (nodeId, nodes) => {
-        const children = nodes.filter(n => n.parentId === nodeId);
-        return children.reduce((acc, child) => [...acc, child.id, ...getDescendants(child.id, nodes)], []);
-    };
-
-    // Render OrgChart
-    const renderChart = chartData => {
-        if (!chartRef.current) return;
-        chartRef.current.innerHTML = "";
-
-        const chart = new OrgChart()
-            .container(chartRef.current)
-            .data(chartData)
-            .nodeWidth(() => 220)
-            .nodeHeight(() => 120)
-            .childrenMargin(() => 50)
-            .compactMarginBetween(() => 20)
-            .duration(600)
-            .nodeContent(d => `
-                <div style="display:flex; align-items:center; padding:15px; border-radius:15px; border:3px solid #1976d2; background:linear-gradient(145deg,#e3f2fd,#bbdefb); box-shadow:3px 3px 15px rgba(0,0,0,0.15); cursor:pointer;">
-                    <img src="${d.data.image}" style="width:60px; height:60px; border-radius:50%; border:2px solid #1976d2; margin-right:15px;" />
-                    <div>
-                        <div style="font-weight:bold;font-size:16px;color:#0d1b2a;">${d.data.name}</div>
-                        <div style="font-size:14px;color:#555;">${d.data.title}</div>
-                    </div>
-                </div>
-            `)
-            .onNodeClick(d => {
-                if (d.data.isSecretary) return; // Secretaries cannot be editedƒM
-                setEditNodeId(d.data.id);
-                setParentIdValue(d.data.parentId || "");
-            })
-            .linkUpdate(function () {
-                d3.select(this).attr("stroke", "#1976d2").attr("stroke-width", 2);
-            });
-
-        chartInstance.current = chart;
-        chart.render();
-    };
-
-
-    // Fetch CEO + EC Members
-    const fetchData = async () => {
-        const requestId = ++lastRequestId.current;
+    const fetchData = useCallback(async () => {
         try {
             setLoading(true);
-
-            // Fetch CEO
-            const ceoRes = await api.get('/ceo-data');
-            const ceoData = ceoRes.data;
-
-            // Fetch EC Members
-            const ecRes = await getECMembers();
-            const ecMembers = ecRes.data || ecRes; // adjust if getECMembers returns data differently
-
-            if (lastRequestId.current !== requestId) return;
-
-            const formatted = transformData(ceoData, ecMembers);
-            setData(formatted);
-            setTimeout(() => renderChart(formatted), 100);
-
+            const members = await getECMembers();
+            const grouped = groupMembersByRow(Array.isArray(members) ? members : []);
+            setRows(grouped);
+            setOriginalRows(grouped);
         } catch (err) {
-            console.error("Error fetching data:", err.message || err);
+            console.error("Error fetching organization chart:", err);
+            showAlert("Failed to fetch organization chart members", "Error", "error");
         } finally {
-            if (lastRequestId.current === requestId) setLoading(false);
+            setLoading(false);
         }
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+
+    const rowDirtyState = useMemo(() => {
+        return ORG_ROWS.reduce((acc, row) => {
+            const current = rows[row.key].map((member) => member.memberId).join(",");
+            const original = originalRows[row.key].map((member) => member.memberId).join(",");
+            acc[row.key] = current !== original;
+            return acc;
+        }, {});
+    }, [rows, originalRows]);
+
+    const activeRow = useMemo(
+        () => ORG_ROWS.find((row) => row.key === activeTab) || ORG_ROWS[0],
+        [activeTab]
+    );
+    const activeMembers = rows[activeRow.key] || [];
+    const activeRowDirty = rowDirtyState[activeRow.key];
+
+    const moveMember = (rowKey, index, direction) => {
+        setRows((prev) => {
+            const rowMembers = [...prev[rowKey]];
+            const nextIndex = index + direction;
+            if (nextIndex < 0 || nextIndex >= rowMembers.length) return prev;
+
+            [rowMembers[index], rowMembers[nextIndex]] = [rowMembers[nextIndex], rowMembers[index]];
+
+            return {
+                ...prev,
+                [rowKey]: rowMembers,
+            };
+        });
     };
 
-
-    useEffect(() => { fetchData(); }, []);
-
-    // Handle Save parent change
-    const handleSave = async () => {
-        if (!parentIdValue && data.filter(n => n.parentId === null && n.id !== editNodeId).length > 0) {
-            showAlert("Cannot create multiple root nodes!", "Validation Error", "warning");
-            return;
-        }
-
-        const descendants = getDescendants(editNodeId, data);
-        if (descendants.includes(parentIdValue)) {
-            showAlert("Cannot set a descendant as parent!", "Validation Error", "warning");
-            return;
-        }
-
+    const saveRow = async (rowKey) => {
         try {
-            setSaving(true);
-            const res = await updateParentMemberId(editNodeId, parentIdValue || null);
+            setSavingRow(rowKey);
+            const memberIds = rows[rowKey].map((member) => member.memberId);
+            const res = await updateOrgChartSort(rowKey, memberIds);
 
-            if (res && res.success) {
-                const updated = data.map(node =>
-                    node.id === editNodeId ? { ...node, parentId: parentIdValue || null } : node
-                );
-
-                setData(updated);
-                chartInstance.current?.data(updated).render();
-                setEditNodeId(null);
-                setParentIdValue("");
-            } else {
-                showAlert("Failed to update parent. Please try again.", "Error", "error");
+            if (!res?.success) {
+                showAlert(res?.message || "Failed to save organization chart order", "Error", "error");
+                return;
             }
+
+            setOriginalRows((prev) => ({
+                ...prev,
+                [rowKey]: rows[rowKey],
+            }));
+            showAlert("Organization chart order updated successfully", "Success", "success");
         } catch (err) {
-            console.error(err);
-            showAlert("Error saving parent. Please try again.", "Error", "error");
+            console.error("Error saving organization chart order:", err);
+            showAlert("Failed to save organization chart order", "Error", "error");
         } finally {
-            setSaving(false);
+            setSavingRow("");
         }
     };
 
-    const handleCancel = () => { setEditNodeId(null); setParentIdValue(""); };
-    const editingNode = data.find(n => n.id === editNodeId);
-    const descendants = editNodeId ? getDescendants(editNodeId, data) : [];
+    const renderMember = (member, index, rowKey, total) => (
+        <Paper
+            key={member.memberId}
+            variant="outlined"
+            sx={{
+                px: { xs: 1.5, md: 2 },
+                py: 1.5,
+                borderRadius: 2,
+                display: "flex",
+                alignItems: "center",
+                gap: 2,
+                minHeight: 84,
+                bgcolor: "#fff",
+                borderColor: "#e1e5ee",
+                transition: "border-color 160ms ease, box-shadow 160ms ease",
+                "&:hover": {
+                    borderColor: "#93a3bf",
+                    boxShadow: "0 8px 24px rgba(15, 35, 75, 0.08)",
+                },
+            }}
+        >
+            <Avatar
+                src={member.companyOrIndividualImage ? `${baseImageURL}${member.companyOrIndividualImage}` : ""}
+                sx={{ width: 52, height: 52, bgcolor: "#102b61", flexShrink: 0 }}
+            >
+                {(member.representiveName || "M").charAt(0)}
+            </Avatar>
+
+            <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography fontWeight={700} noWrap>
+                    {member.representiveName || "Unnamed Member"}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                    {member.ecPosition || "-"}
+                </Typography>
+            </Box>
+
+            <Stack direction="row" spacing={0.5}>
+                <IconButton
+                    aria-label="Move up"
+                    onClick={() => moveMember(rowKey, index, -1)}
+                    disabled={index === 0 || Boolean(savingRow)}
+                    size="small"
+                >
+                    <KeyboardArrowUpIcon />
+                </IconButton>
+                <IconButton
+                    aria-label="Move down"
+                    onClick={() => moveMember(rowKey, index, 1)}
+                    disabled={index === total - 1 || Boolean(savingRow)}
+                    size="small"
+                >
+                    <KeyboardArrowDownIcon />
+                </IconButton>
+            </Stack>
+        </Paper>
+    );
 
     return (
-        <Box sx={{ width: "100%", height: "100vh", p: 3, background: "#f0f2f5" }}>
-            <Typography variant="h4" fontWeight="bold" textAlign="center" gutterBottom sx={{ color: "#1976d2", mb: 3 }}>
-                MMBC Organization Chart ({data.length === 0 ? "..." : data.length} members)
-            </Typography>
-
-            {loading ? (
-                <Box sx={{ width: "100%", height: "80vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <CircularProgress color="primary" size={60} />
+        <Box sx={{ p: 3, bgcolor: "#f6f7fb", minHeight: "100vh" }}>
+            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={2} sx={{ mb: 3 }}>
+                <Box>
+                    <Typography variant="h5" fontWeight={800}>
+                        Org Chart
+                    </Typography>
+                    <Typography color="text.secondary">
+                        Manage President, BOD, and EC row display order.
+                    </Typography>
                 </Box>
-            ) : (
-                <div ref={chartRef} style={{ width: "100%", height: "85vh", borderRadius: "12px", overflow: "auto" }} />
-            )}
+                <Button variant="outlined" onClick={fetchData} disabled={loading || Boolean(savingRow)}>
+                    Refresh
+                </Button>
+            </Stack>
 
-            {/* Edit Dialog */}
-            <Dialog open={Boolean(editNodeId)} onClose={handleCancel} maxWidth="sm" fullWidth>
-                <DialogTitle>Edit Node Parent</DialogTitle>
-                <DialogContent dividers sx={{ position: 'relative' }}>
-                    {saving && (
-                        <Box sx={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", bgcolor: "rgba(255,255,255,0.7)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "inherit" }}>
-                            <CircularProgress size={50} />
-                        </Box>
-                    )}
+            <Paper
+                sx={{
+                    borderRadius: 2,
+                    overflow: "hidden",
+                    border: "1px solid #e3e7ef",
+                    boxShadow: "0 8px 24px rgba(18, 35, 65, 0.06)",
+                }}
+            >
+                <Box sx={{ px: { xs: 1.5, md: 2.5 }, pt: 2, bgcolor: "#fff" }}>
+                    <Tabs
+                        value={activeTab}
+                        onChange={(_, value) => setActiveTab(value)}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        sx={{
+                            minHeight: 54,
+                            "& .MuiTabs-indicator": {
+                                height: 3,
+                                borderRadius: 3,
+                                bgcolor: "#102b61",
+                            },
+                            "& .MuiTab-root": {
+                                minHeight: 54,
+                                textTransform: "none",
+                                alignItems: "center",
+                                color: "text.secondary",
+                                fontWeight: 700,
+                                mr: 1,
+                                borderRadius: "8px 8px 0 0",
+                            },
+                            "& .Mui-selected": {
+                                color: "#102b61",
+                                bgcolor: "#f3f6fb",
+                            },
+                        }}
+                    >
+                        {ORG_ROWS.map((row) => {
+                            const count = rows[row.key]?.length || 0;
+                            const dirty = rowDirtyState[row.key];
 
-                    {editingNode && (
-                        <Box display="flex" alignItems="center" mb={3}>
-                            <Avatar src={editingNode.image} sx={{ width: 60, height: 60, mr: 2 }} />
-                            <Box>
-                                <Typography variant="subtitle1" fontWeight="bold">{editingNode.name}</Typography>
-                                <Typography variant="body2" color="textSecondary">{editingNode.title}</Typography>
-                            </Box>
-                        </Box>
-                    )}
+                            return (
+                                <Tab
+                                    key={row.key}
+                                    value={row.key}
+                                    icon={row.icon}
+                                    iconPosition="start"
+                                    label={
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            <span>{row.title}</span>
+                                            <Chip
+                                                label={count}
+                                                size="small"
+                                                color={dirty ? "warning" : "default"}
+                                                sx={{ height: 22, minWidth: 28, fontWeight: 700 }}
+                                            />
+                                        </Stack>
+                                    }
+                                />
+                            );
+                        })}
+                    </Tabs>
+                </Box>
 
-                    <FormControl fullWidth>
-                        <InputLabel>Parent</InputLabel>
-                        <Select
-                            label="Parent"
-                            value={parentIdValue}
-                            onChange={e => setParentIdValue(e.target.value)}
-                            disabled={saving}
+                <Divider />
+
+                {loading ? (
+                    <Box sx={{ height: 420, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <CircularProgress />
+                    </Box>
+                ) : (
+                    <>
+                        <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            alignItems={{ xs: "stretch", sm: "center" }}
+                            justifyContent="space-between"
+                            spacing={2}
+                            sx={{
+                                px: { xs: 2, md: 3 },
+                                py: 2.5,
+                                bgcolor: "#f8faff",
+                            }}
                         >
-                            {data
-                                .filter(node => node.id !== editNodeId && !descendants.includes(node.id) && !node.isSecretary)
-                                .map(node => (
-                                    <MenuItem key={node.id} value={node.id}>{node.name}</MenuItem>
-                                ))}
-                        </Select>
-                    </FormControl>
-                </DialogContent>
-                <DialogActions>
-                    <Button onClick={handleCancel} color="inherit" disabled={saving}>Cancel</Button>
-                    <Button onClick={handleSave} variant="contained" color="primary" disabled={saving}>
-                        {saving ? <CircularProgress size={24} color="inherit" /> : "Save"}
-                    </Button>
-                </DialogActions>
-            </Dialog>
+                            <Stack direction="row" alignItems="center" spacing={1.5}>
+                                <Box
+                                    sx={{
+                                        width: 42,
+                                        height: 42,
+                                        borderRadius: 2,
+                                        display: "grid",
+                                        placeItems: "center",
+                                        bgcolor: "#102b61",
+                                        color: "#fff",
+                                        "& svg": { fontSize: 24 },
+                                    }}
+                                >
+                                    {activeRow.icon}
+                                </Box>
+                                <Box>
+                                    <Stack direction="row" alignItems="center" spacing={1}>
+                                        <Typography variant="h6" fontWeight={800}>
+                                            {activeRow.subtitle}
+                                        </Typography>
+                                        {activeRowDirty && (
+                                            <Chip
+                                                label="Unsaved"
+                                                color="warning"
+                                                size="small"
+                                                sx={{ fontWeight: 700 }}
+                                            />
+                                        )}
+                                    </Stack>
+                                    <Typography variant="body2" color="text.secondary">
+                                        {activeMembers.length} member{activeMembers.length === 1 ? "" : "s"}
+                                    </Typography>
+                                </Box>
+                            </Stack>
+
+                            <Button
+                                variant="contained"
+                                startIcon={savingRow === activeRow.key ? <CircularProgress size={18} color="inherit" /> : <SaveIcon />}
+                                disabled={!activeRowDirty || Boolean(savingRow)}
+                                onClick={() => saveRow(activeRow.key)}
+                                sx={{
+                                    minHeight: 44,
+                                    borderRadius: 2,
+                                    bgcolor: "#102b61",
+                                    "&:hover": { bgcolor: "#0d2452" },
+                                }}
+                            >
+                                Save Order
+                            </Button>
+                        </Stack>
+
+                        <Divider />
+
+                        <Box sx={{ p: { xs: 2, md: 3 }, bgcolor: "#fff" }}>
+                            {activeMembers.length === 0 ? (
+                                <Box
+                                    sx={{
+                                        py: 8,
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        border: "1px dashed #c9d2e3",
+                                        borderRadius: 2,
+                                        bgcolor: "#fbfcff",
+                                    }}
+                                >
+                                    <Typography color="text.secondary">
+                                        No members in this row.
+                                    </Typography>
+                                </Box>
+                            ) : (
+                                <Stack spacing={1.5}>
+                                    {activeMembers.map((member, index) => renderMember(member, index, activeRow.key, activeMembers.length))}
+                                </Stack>
+                            )}
+                        </Box>
+                    </>
+                )}
+            </Paper>
+
             <CommonAlertDialog
                 open={alertDialog.open}
                 title={alertDialog.title}

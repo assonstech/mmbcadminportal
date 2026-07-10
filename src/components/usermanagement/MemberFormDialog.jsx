@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, Box, Typography, Grid, TextField, FormControlLabel, Switch, MenuItem, CircularProgress, Checkbox } from '@mui/material';
 import { renderField } from './FormField';
 import UploadImage from './UploadImage'; // <-- Use your upload component
@@ -18,8 +18,6 @@ export default function MemberFormDialog({
     ref,
     saveLoading,
     initialForm,
-    memberList // 👈 Add this new prop
-
 }) {
     console.log("doctype", form.documentType)
     const isIndividual = form.typeOfMembershipId === 3;
@@ -291,7 +289,7 @@ export default function MemberFormDialog({
 
                                                             setForm(f => {
                                                                 if (!f.memberId && !checked) {
-                                                                    return { ...f, isBOD: checked, ecPosition: "", parentMemberId: null };
+                                                                    return { ...f, isBOD: checked, ecPosition: "", orgChartRow: "" };
                                                                 }
                                                                 return { ...f, isBOD: checked };
                                                             });
@@ -299,7 +297,7 @@ export default function MemberFormDialog({
                                                             setErrors(prev => ({
                                                                 ...prev,
                                                                 ecPosition: "",
-                                                                parentMemberId: ""
+                                                                orgChartRow: ""
                                                             }));
                                                         }}
                                                     />
@@ -309,41 +307,41 @@ export default function MemberFormDialog({
                                         </Grid>
 
                                         {/* Only show these fields if isBOD is true and not CEO */}
-                                        <Grid item xs={12} md={4}>
-                                            <TextField
-                                                select
-                                                label="People Leader"
-                                                fullWidth
-                                                sx={{ minWidth: 200 }}
-                                                value={form.parentMemberId || ""}
-                                                onChange={(e) =>
-                                                    setForm(f => ({ ...f, parentMemberId: e.target.value }))
-                                                }
-                                                error={!!errors.parentMemberId}
-                                                helperText={errors.parentMemberId || ""}
-                                            >
-                                                {memberList
-                                                    .filter(m => m.isBOD && m.memberId !== form.memberId) // Only BOD members
-                                                    .map(m => (
-                                                        <MenuItem key={m.memberId} value={m.memberId}>
-                                                            {m.representiveName}
-                                                        </MenuItem>
-                                                    ))}
-                                            </TextField>
-                                        </Grid>
+                                        {form.isBOD && (
+                                            <>
+                                                <Grid item xs={12} md={4}>
+                                                    <TextField
+                                                        select
+                                                        label="Org Chart Row"
+                                                        fullWidth
+                                                        sx={{ minWidth: 200 }}
+                                                        value={form.orgChartRow || ""}
+                                                        onChange={(e) =>
+                                                            setForm(f => ({ ...f, orgChartRow: e.target.value }))
+                                                        }
+                                                        error={!!errors.orgChartRow}
+                                                        helperText={errors.orgChartRow || ""}
+                                                    >
+                                                        <MenuItem value="PRESIDENT">President</MenuItem>
+                                                        <MenuItem value="BOD">BOD</MenuItem>
+                                                        <MenuItem value="EC">EC</MenuItem>
+                                                    </TextField>
+                                                </Grid>
 
-                                        <Grid item xs={12} md={4}>
-                                            <TextField
-                                                label="EC Position"
-                                                fullWidth
-                                                value={form.ecPosition || ""}
-                                                onChange={(e) =>
-                                                    setForm(f => ({ ...f, ecPosition: e.target.value }))
-                                                }
-                                                error={!!errors.ecPosition}
-                                                helperText={errors.ecPosition || ""}
-                                            />
-                                        </Grid>
+                                                <Grid item xs={12} md={4}>
+                                                    <TextField
+                                                        label="EC Position"
+                                                        fullWidth
+                                                        value={form.ecPosition || ""}
+                                                        onChange={(e) =>
+                                                            setForm(f => ({ ...f, ecPosition: e.target.value }))
+                                                        }
+                                                        error={!!errors.ecPosition}
+                                                        helperText={errors.ecPosition || ""}
+                                                    />
+                                                </Grid>
+                                            </>
+                                        )}
                                     </Grid>
                                 </Box>
                             )}
@@ -463,4 +461,3 @@ export default function MemberFormDialog({
         </Dialog>
     );
 }
-

@@ -117,7 +117,6 @@ export default function SeasonalPromotionPage() {
   const formErrors = {
     title: !form.title.trim(),
     shortDescription: !form.shortDescription.trim(),
-    fullDescription: !form.fullDescription.trim(),
     startDate: !form.startDate,
     endDate: !form.endDate,
     imageUrl: !imagePreview,
@@ -516,9 +515,6 @@ export default function SeasonalPromotionPage() {
               multiline
 	              minRows={4}
 	              disabled={submitLoading}
-	              required
-	              error={submitAttempted && formErrors.fullDescription}
-	              helperText={submitAttempted && formErrors.fullDescription ? 'Required' : ''}
 	            />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
