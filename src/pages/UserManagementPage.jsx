@@ -269,12 +269,35 @@ export default function UserManagementPage() {
 
   const formatDateForInput = (value) => {
     if (!value) return "";
-    if (value.includes("-")) return value;
-    if (value.length !== 8) return "";
-    const mm = value.slice(0, 2);
-    const dd = value.slice(2, 4);
-    const yyyy = value.slice(4, 8);
-    return `${yyyy}-${mm}-${dd}`;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return value.toISOString().slice(0, 10);
+    }
+
+    const textValue = String(value).trim();
+
+    const isoMatch = textValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+
+    const slashMatch = textValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slashMatch) {
+      const dd = slashMatch[1].padStart(2, "0");
+      const mm = slashMatch[2].padStart(2, "0");
+      return `${slashMatch[3]}-${mm}-${dd}`;
+    }
+
+    if (/^\d{8}$/.test(textValue)) {
+      const mm = textValue.slice(0, 2);
+      const dd = textValue.slice(2, 4);
+      const yyyy = textValue.slice(4, 8);
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    const parsedDate = new Date(textValue);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return parsedDate.toISOString().slice(0, 10);
+    }
+
+    return "";
   };
 
   const handleDeleteConfirm = async () => {
